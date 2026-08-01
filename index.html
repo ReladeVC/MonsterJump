@@ -65,38 +65,59 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.85);
+      background: linear-gradient(160deg, rgba(26,26,46,0.95), rgba(15,52,96,0.95));
       color: white;
-      padding: 40px 50px;
-      border-radius: 20px;
+      padding: 36px 40px 32px;
+      border-radius: 24px;
       text-align: center;
       pointer-events: auto;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      min-width: 280px;
     }
     #game-over h1 {
-      font-size: 36px;
-      margin-bottom: 10px;
+      font-size: 32px;
+      margin-bottom: 8px;
       color: #ff6b6b;
+      letter-spacing: 0.5px;
     }
     #game-over p {
-      font-size: 20px;
-      margin-bottom: 25px;
+      font-size: 18px;
+      margin-bottom: 28px;
       opacity: 0.9;
     }
-    #restart-btn {
-      background: #4ecdc4;
+    #game-over-buttons {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .go-btn {
       border: none;
-      color: #1a1a2e;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
-      padding: 14px 36px;
+      padding: 14px 28px;
       border-radius: 50px;
       cursor: pointer;
-      transition: transform 0.15s, background 0.15s;
+      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+      min-width: 120px;
     }
-    #restart-btn:hover {
-      background: #45b7aa;
-      transform: scale(1.05);
+    .go-btn:hover {
+      transform: translateY(-2px) scale(1.03);
+      filter: brightness(1.08);
+    }
+    .go-btn:active {
+      transform: scale(0.97);
+    }
+    #menu-btn {
+      background: linear-gradient(135deg, #5c6bc0, #3949ab);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(57, 73, 171, 0.45);
+    }
+    #retry-btn {
+      background: linear-gradient(135deg, #4ecdc4, #26a69a);
+      color: #1a1a2e;
+      box-shadow: 0 6px 18px rgba(38, 166, 154, 0.45);
     }
     #hint {
       position: absolute;
@@ -117,7 +138,10 @@
       <div id="game-over">
         <h1>Игра окончена</h1>
         <p>Счёт: <span id="final-score">0</span></p>
-        <button id="restart-btn">Играть снова</button>
+        <div id="game-over-buttons">
+          <button class="go-btn" id="menu-btn">Меню</button>
+          <button class="go-btn" id="retry-btn">Повторить</button>
+        </div>
       </div>
       <div id="hint">← → или A D · на телефоне свайп</div>
     </div>
@@ -134,7 +158,8 @@
     const scoreEl = document.getElementById('score');
     const gameOverEl = document.getElementById('game-over');
     const finalScoreEl = document.getElementById('final-score');
-    const restartBtn = document.getElementById('restart-btn');
+    const menuBtn = document.getElementById('menu-btn');
+    const retryBtn = document.getElementById('retry-btn');
     const hintEl = document.getElementById('hint');
 
     // ---------- НАСТРОЙКИ ----------
@@ -145,29 +170,19 @@
     const MOVE_SPEED = 6.2;
     const PLATFORM_WIDTH = 70;
     const PLATFORM_HEIGHT = 16;
-    const PLAYER_WIDTH = 40;
-    const PLAYER_HEIGHT = 50;
+    const PLAYER_WIDTH = 60;   // +50%
+    const PLAYER_HEIGHT = 75;  // +50%
 
     // =====================================================
     //  СПРАЙТЫ (ASSETS)
     // =====================================================
-    // Игра автоматически пытается загрузить картинки из папки assets/
-    // Если файла нет или он не загрузился — используется стандартная отрисовка.
-    //
-    // Список всех спрайтов:
-    //
-    //   assets/titlename.png           — название "Monster Jump"
+    //   assets/titlename.png           — название
     //   assets/start.png               — кнопка Старт
-    //   assets/player.png              — персонаж 1
-    //   assets/player2.png             — персонаж 2
-    //   assets/player3.png             — персонаж 3
-    //   assets/platform.png            — обычная платформа
-    //   assets/platform_broken.png     — ломающаяся платформа
-    //   assets/platform_moving.png     — двигающаяся платформа
-    //   assets/spring.png              — пружина
-    //   assets/bonus.png               — бонус (увеличивает персонажа)
-    //   assets/background.png          — фон
-    //   assets/music.mp3               — фоновая музыка
+    //   assets/player.png / player2 / player3
+    //   assets/platform.png, platform_broken, platform_moving
+    //   assets/spring.png, bonus.png, background.png
+    //   assets/music.mp3
+    //   assets/Lider.png               — иконка рекорда (достижения)
     // =====================================================
 
     const ASSETS = {
@@ -182,7 +197,8 @@
       spring:          'assets/spring.png',
       bonus:           'assets/bonus.png',
       background:      'assets/background.png',
-      music:           'assets/music.mp3'
+      music:           'assets/music.mp3',
+      lider:           'assets/Lider.png'
     };
 
     let titleNameImg = null;
@@ -194,6 +210,7 @@
     let springImg = null;
     let bonusImg = null;
     let bgImg = null;
+    let liderImg = null;
 
     // Текущий выбранный персонаж (0, 1 или 2)
     let selectedCharacter = 0;
@@ -244,6 +261,13 @@
       'assets/Bonus.jpg'
     ]);
     bgImg             = loadImage(ASSETS.background);
+    liderImg          = loadImageWithFallback([
+      'assets/Lider.png',
+      'assets/lider.png',
+      'assets/LIDER.png',
+      'assets/Leader.png',
+      'assets/leader.png'
+    ]);
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
@@ -265,6 +289,12 @@
     let cameraY = 0;
     let maxHeight = 0;
     let score = 0;
+    // Последнее / лучшее достижение (метры)
+    let bestScore = 0;
+    try {
+      bestScore = parseInt(localStorage.getItem('monsterJumpBest') || '0', 10) || 0;
+    } catch (e) { bestScore = 0; }
+
     let gameState = 'title'; // 'title' | 'playing' | 'gameover'
     let keys = { left: false, right: false };
     let touchX = null;
@@ -273,7 +303,7 @@
     let bonusActive = false;
     let bonusTimer = 0;        // оставшееся время в кадрах (~60fps * 5 = 300)
     const BONUS_DURATION = 300; // 5 секунд
-    const BONUS_SCALE = 4;
+    const BONUS_SCALE = 2;
     const BONUS_FLY_FORCE = -11; // постоянная сила вверх во время бонуса
 
     // Частицы (звёздочки) при бонусе
@@ -282,21 +312,42 @@
     // Пауза
     let isPaused = false;
 
-    // ---------- МУЗЫКА ----------
+    // ---------- МУЗЫКА (фоновый слой) ----------
     let musicEnabled = true;
     let musicStarted = false;
-    const music = new Audio(ASSETS.music);
+
+    // Пробуем несколько путей (регистр важен на GitHub)
+    const music = new Audio();
     music.loop = true;
-    music.volume = 0.35; // тише, чтобы были слышны звуки прыжков
     music.preload = 'auto';
+    music.volume = 0.22; // тихо на фоне, SFX слышны отдельно
+
+    (function initMusicSrc() {
+      const candidates = [
+        'assets/music.mp3',
+        'assets/Music.mp3',
+        'assets/MUSIC.mp3',
+        'assets/music.ogg',
+        'assets/music.wav'
+      ];
+      let i = 0;
+      function tryNext() {
+        if (i >= candidates.length) {
+          console.warn('Музыка не найдена. Ожидается assets/music.mp3');
+          return;
+        }
+        music.src = candidates[i++];
+      }
+      music.addEventListener('error', tryNext);
+      tryNext();
+    })();
 
     function startMusic() {
       if (!musicEnabled) return;
-      music.play().then(() => {
-        musicStarted = true;
-      }).catch(() => {
-        // Браузер может заблокировать автозапуск — запустим при следующем клике
-      });
+      const p = music.play();
+      if (p && p.then) {
+        p.then(() => { musicStarted = true; }).catch(() => {});
+      }
     }
 
     function stopMusic() {
@@ -314,7 +365,21 @@
       }
     }
 
-    // ---------- ЗВУК (Web Audio API) ----------
+    // Координаты UI-кнопок (нужны и для кликов, и для отрисовки)
+    const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
+    const musicBtn = { x: WIDTH - 96, y: 16, size: 36 };
+
+    function isHudClick(mx, my) {
+      const buttons = [pauseBtn, musicBtn];
+      for (const b of buttons) {
+        if (mx >= b.x && mx <= b.x + b.size && my >= b.y && my <= b.y + b.size) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // ---------- ЗВУК ЭФФЕКТОВ (Web Audio API) ----------
     let audioCtx = null;
 
     function getAudioCtx() {
@@ -469,31 +534,64 @@
 
       // генерируем платформы вверх
       let y = HEIGHT - 180;
+      let prevWasSpring = false;
       while (y > -HEIGHT * 2) {
-        platforms.push(createPlatform(y));
-        const last = platforms[platforms.length - 1];
-        // Бонус только на обычных платформах (не на пружинах, ломающихся, движущихся)
-        if (last.type === 'normal' && Math.random() < 0.14) {
+        // После пружины — увеличенный зазор, платформу не ставим «прямо над» ней
+        if (prevWasSpring) {
+          y -= 90 + Math.random() * 50;
+        }
+        const p = createPlatform(y);
+        // Не ставим платформу над пружиной (по X и близко по Y)
+        avoidAboveSprings(p);
+        platforms.push(p);
+        prevWasSpring = (p.type === 'spring');
+        if (p.type === 'normal' && Math.random() < 0.14) {
           bonuses.push(createBonus(
-            last.x + last.width / 2 - 18,
-            last.y - 50
+            p.x + p.width / 2 - 18,
+            p.y - 50
           ));
         }
         y -= 50 + Math.random() * 70;
       }
     }
 
+    // Сдвигает платформу по X, если она оказывается прямо над пружиной
+    function avoidAboveSprings(p) {
+      for (const s of platforms) {
+        if (s.type !== 'spring') continue;
+        const dy = s.y - p.y; // s ниже по миру, если dy > 0
+        if (dy > 0 && dy < 140) {
+          const overlap =
+            p.x < s.x + s.width + 10 &&
+            p.x + p.width > s.x - 10;
+          if (overlap) {
+            // Уводим в сторону
+            if (s.x > WIDTH / 2) {
+              p.x = Math.max(0, s.x - PLATFORM_WIDTH - 30 - Math.random() * 40);
+            } else {
+              p.x = Math.min(WIDTH - PLATFORM_WIDTH, s.x + s.width + 30 + Math.random() * 40);
+            }
+          }
+        }
+      }
+    }
+
     function generateMorePlatforms() {
       let highest = platforms.reduce((min, p) => Math.min(min, p.y), Infinity);
+      let prevWasSpring = platforms.length && platforms[platforms.length - 1].type === 'spring';
       while (highest > cameraY - HEIGHT) {
         highest -= 55 + Math.random() * 75;
-        platforms.push(createPlatform(highest));
-        const last = platforms[platforms.length - 1];
-        // Бонус только на обычных платформах, и не во время действия бонуса
-        if (!bonusActive && last.type === 'normal' && Math.random() < 0.14) {
+        if (prevWasSpring) {
+          highest -= 90 + Math.random() * 50;
+        }
+        const p = createPlatform(highest);
+        avoidAboveSprings(p);
+        platforms.push(p);
+        prevWasSpring = (p.type === 'spring');
+        if (!bonusActive && p.type === 'normal' && Math.random() < 0.14) {
           bonuses.push(createBonus(
-            last.x + last.width / 2 - 18,
-            last.y - 50
+            p.x + p.width / 2 - 18,
+            p.y - 50
           ));
         }
       }
@@ -503,7 +601,7 @@
     window.addEventListener('keydown', e => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
-      if (e.code === 'Space' && gameState === 'gameover') restart();
+      if (e.code === 'Space' && gameState === 'gameover') retryGame();
     });
     window.addEventListener('keyup', e => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -539,9 +637,13 @@
     // Мышь (для удобства на ПК)
     let mouseDown = false;
     canvas.addEventListener('mousedown', e => {
-      mouseDown = true;
+      if (gameState !== 'playing') return;
       const rect = canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
+      const my = (e.clientY - rect.top) * (HEIGHT / rect.height);
+      // Клик по кнопкам UI — не двигаем персонажа
+      if (isHudClick(mx, my)) return;
+      mouseDown = true;
       if (mx < player.x + player.width / 2) keys.left = true;
       else keys.right = true;
     });
@@ -551,14 +653,15 @@
       keys.right = false;
     });
     canvas.addEventListener('mousemove', e => {
-      if (!mouseDown) return;
+      if (!mouseDown || gameState !== 'playing') return;
       const rect = canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
       keys.left = mx < player.x + player.width / 2;
       keys.right = !keys.left;
     });
 
-    restartBtn.addEventListener('click', restart);
+    menuBtn.addEventListener('click', goToMenu);
+    retryBtn.addEventListener('click', retryGame);
 
     // ---------- ФИЗИКА И ЛОГИКА ----------
     function update() {
@@ -662,12 +765,16 @@
         }
       }
 
-      // Подсчёт высоты
+      // Подсчёт высоты (метры)
       const currentHeight = Math.max(0, Math.floor((-cameraY) / 10));
       if (currentHeight > maxHeight) {
         maxHeight = currentHeight;
         score = maxHeight;
-        scoreEl.textContent = score;
+        scoreEl.textContent = score + ' m';
+        if (score > bestScore) {
+          bestScore = score;
+          try { localStorage.setItem('monsterJumpBest', String(bestScore)); } catch (e) {}
+        }
       }
 
       // Генерация новых платформ
@@ -685,7 +792,11 @@
 
     function gameOver() {
       gameState = 'gameover';
-      finalScoreEl.textContent = score;
+      finalScoreEl.textContent = score + ' m';
+      if (score > bestScore) {
+        bestScore = score;
+        try { localStorage.setItem('monsterJumpBest', String(bestScore)); } catch (e) {}
+      }
       gameOverEl.style.display = 'block';
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
@@ -712,7 +823,7 @@
       bonusTimer = 0;
       particles = [];
       isPaused = false;
-      scoreEl.textContent = '0';
+      scoreEl.textContent = '0 m';
       scoreEl.style.display = 'block';
       gameState = 'playing';
       gameOverEl.style.display = 'none';
@@ -720,12 +831,21 @@
       initPlatforms();
     }
 
-    function restart() {
-      // После game over возвращаемся на титульный экран
+    function goToMenu() {
+      // В меню (выбор персонажа)
       gameState = 'title';
       gameOverEl.style.display = 'none';
       scoreEl.style.display = 'none';
       hintEl.style.display = 'none';
+      isPaused = false;
+      keys.left = false;
+      keys.right = false;
+    }
+
+    function retryGame() {
+      // Повторить с тем же персонажем
+      gameOverEl.style.display = 'none';
+      startGame();
     }
 
     // ---------- ОТРИСОВКА ----------
@@ -1036,7 +1156,7 @@
     // ---------- ТИТУЛЬНЫЙ ЭКРАН ----------
     // Координаты элементов (для кликов)
     const titleLayout = {
-      charSize: 90,
+      charSize: 110,
       charY: 320,
       charGap: 30,
       startBtnW: 180,
@@ -1229,6 +1349,9 @@
         ctx.fill();
       }
 
+      // Счёт и рекорд
+      drawScoreHUD();
+
       // Кнопки паузы и музыки (правый верхний угол)
       drawHUDButtons();
 
@@ -1253,9 +1376,45 @@
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
     }
 
-    // Кнопки UI
-    const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
-    const musicBtn = { x: WIDTH - 96, y: 16, size: 36 };
+    function drawScoreHUD() {
+      if (gameState !== 'playing') return;
+
+      // --- Рекорд слева: иконка Lider + число + m ---
+      const leftX = 14;
+      const topY = 18;
+      const iconSize = 28;
+
+      // Фон плашки
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      roundRect(leftX - 4, topY - 4, 130, 36, 10);
+      ctx.fill();
+
+      if (isImageReady(liderImg)) {
+        ctx.drawImage(liderImg, leftX, topY, iconSize, iconSize);
+      } else {
+        // Fallback — жёлтая медаль
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(leftX + iconSize / 2, topY + iconSize / 2, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#B8860B';
+        ctx.font = 'bold 12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('1', leftX + iconSize / 2, topY + iconSize / 2);
+        ctx.textBaseline = 'alphabetic';
+      }
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 18px Segoe UI, Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bestScore + ' m', leftX + iconSize + 8, topY + iconSize / 2);
+      ctx.textBaseline = 'alphabetic';
+
+      // --- Текущий счёт по центру (дублируем поверх HTML, на всякий случай) ---
+      // HTML #score уже показывает текущий с " m"
+    }
 
     function drawHUDButtons() {
       // --- Пауза (только в игре) ---
