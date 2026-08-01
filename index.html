@@ -199,7 +199,27 @@
 
     function loadImage(src) {
       const img = new Image();
+      // Важно для GitHub Pages: путь чувствителен к регистру
       img.src = src;
+      img.onerror = () => {
+        console.warn('Не удалось загрузить:', src);
+      };
+      return img;
+    }
+
+    // Пробуем несколько вариантов имени файла (для GitHub, где регистр важен)
+    function loadImageWithFallback(paths) {
+      const img = new Image();
+      let index = 0;
+      function tryNext() {
+        if (index >= paths.length) {
+          console.warn('Бонус не найден. Проверь имя файла: assets/bonus.png');
+          return;
+        }
+        img.src = paths[index++];
+      }
+      img.onerror = tryNext;
+      tryNext();
       return img;
     }
 
@@ -212,7 +232,15 @@
     brokenPlatformImg = loadImage(ASSETS.platformBroken);
     movingPlatformImg = loadImage(ASSETS.platformMoving);
     springImg         = loadImage(ASSETS.spring);
-    bonusImg          = loadImage(ASSETS.bonus);
+    // Бонус: пробуем разные варианты имени (частая проблема на GitHub)
+    bonusImg          = loadImageWithFallback([
+      'assets/bonus.png',
+      'assets/Bonus.png',
+      'assets/BONUS.png',
+      'assets/bonus.PNG',
+      'assets/bonus.jpg',
+      'assets/Bonus.jpg'
+    ]);
     bgImg             = loadImage(ASSETS.background);
 
     function isImageReady(img) {
@@ -251,6 +279,95 @@
 
     // Пауза
     let isPaused = false;
+
+    // ---------- ЗВУК (Web Audio API) ----------
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    // Звук обычного прыжка
+    function playJumpSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(420, now + 0.06);
+        osc.frequency.exponentialRampToValueAtTime(180, now + 0.18);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } catch (e) {}
+    }
+
+    // Звук пружины (более высокий и длинный)
+    function playSpringSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
+        osc.frequency.exponentialRampToValueAtTime(350, now + 0.25);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(0.32, now + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+        osc.start(now);
+        osc.stop(now + 0.32);
+      } catch (e) {}
+    }
+
+    // Звук подбора бонуса
+    function playBonusSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+
+        // Два тона вверх
+        [0, 0.08, 0.16].forEach((delay, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.type = 'sine';
+          const freq = 400 + i * 180;
+          osc.frequency.setValueAtTime(freq, now + delay);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.3, now + delay + 0.1);
+
+          gain.gain.setValueAtTime(0.001, now + delay);
+          gain.gain.exponentialRampToValueAtTime(0.22, now + delay + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.15);
+
+          osc.start(now + delay);
+          osc.stop(now + delay + 0.18);
+        });
+      } catch (e) {}
+    }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     function resize() {
@@ -320,9 +437,9 @@
       let y = HEIGHT - 180;
       while (y > -HEIGHT * 2) {
         platforms.push(createPlatform(y));
-        // Иногда ставим бонус над платформой
-        if (Math.random() < 0.12) {
-          const last = platforms[platforms.length - 1];
+        const last = platforms[platforms.length - 1];
+        // Бонус только на обычных платформах (не на пружинах, ломающихся, движущихся)
+        if (last.type === 'normal' && Math.random() < 0.14) {
           bonuses.push(createBonus(
             last.x + last.width / 2 - 18,
             last.y - 50
@@ -337,9 +454,9 @@
       while (highest > cameraY - HEIGHT) {
         highest -= 55 + Math.random() * 75;
         platforms.push(createPlatform(highest));
-        // Шанс бонуса ~12%, но НЕ во время действия бонуса
-        if (!bonusActive && Math.random() < 0.12) {
-          const last = platforms[platforms.length - 1];
+        const last = platforms[platforms.length - 1];
+        // Бонус только на обычных платформах, и не во время действия бонуса
+        if (!bonusActive && last.type === 'normal' && Math.random() < 0.14) {
           bonuses.push(createBonus(
             last.x + last.width / 2 - 18,
             last.y - 50
@@ -478,8 +595,7 @@
             b.collected = true;
             bonusActive = true;
             bonusTimer = BONUS_DURATION;
-            // Размер коллизии НЕ меняем и позицию НЕ сдвигаем —
-            // только визуальный скейл в drawPlayer
+            playBonusSound();
           }
         }
       }
@@ -499,6 +615,9 @@
 
             if (p.type === 'spring') {
               player.vy = JUMP_FORCE * 1.7;
+              playSpringSound();
+            } else {
+              playJumpSound();
             }
             if (p.type === 'breaking') {
               p.broken = true;
@@ -539,6 +658,9 @@
     }
 
     function startGame() {
+      // Разблокируем звук (браузеры требуют жест пользователя)
+      getAudioCtx();
+
       // Устанавливаем выбранного персонажа
       currentPlayerImg = playerImgs[selectedCharacter];
 
@@ -823,27 +945,38 @@
     function drawBonus(b) {
       if (b.collected) return;
       const screenY = b.y - cameraY;
-      if (screenY < -40 || screenY > HEIGHT + 40) return;
+      if (screenY < -50 || screenY > HEIGHT + 50) return;
 
       // Мягкое свечение под бонусом
       ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
       ctx.beginPath();
-      ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 22, 0, Math.PI * 2);
+      ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 24, 0, Math.PI * 2);
       ctx.fill();
 
       if (isImageReady(bonusImg)) {
-        const aspect = bonusImg.naturalWidth / bonusImg.naturalHeight;
-        const h = b.height;
-        const w = h * aspect;
+        // Фиксированный размер ~40px по большей стороне, пропорции сохраняем
+        const nw = bonusImg.naturalWidth;
+        const nh = bonusImg.naturalHeight;
+        const maxSize = 42;
+        let w, h;
+        if (nw >= nh) {
+          w = maxSize;
+          h = maxSize * (nh / nw);
+        } else {
+          h = maxSize;
+          w = maxSize * (nw / nh);
+        }
         const x = b.x + (b.width - w) / 2;
+        const y = screenY + (b.height - h) / 2;
 
         ctx.save();
-        ctx.shadowColor = 'rgba(255, 180, 0, 0.4)';
-        ctx.shadowBlur = 10;
-        ctx.drawImage(bonusImg, x, screenY, w, h);
+        ctx.shadowColor = 'rgba(255, 180, 0, 0.45)';
+        ctx.shadowBlur = 12;
+        ctx.drawImage(bonusImg, x, y, w, h);
         ctx.shadowBlur = 0;
         ctx.restore();
       } else {
+        // Fallback если картинка не загрузилась
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
         ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 16, 0, Math.PI * 2);
