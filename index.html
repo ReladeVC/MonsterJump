@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Doodle Jump Clone</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%);
+      box-shadow: 0 0 40px rgba(0,0,0,0.5);
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #score {
+      margin-top: 20px;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      background: rgba(0,0,0,0.25);
+      padding: 8px 22px;
+      border-radius: 20px;
+    }
+    #game-over {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 40px 50px;
+      border-radius: 20px;
+      text-align: center;
+      pointer-events: auto;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    #game-over h1 {
+      font-size: 36px;
+      margin-bottom: 10px;
+      color: #ff6b6b;
+    }
+    #game-over p {
+      font-size: 20px;
+      margin-bottom: 25px;
+      opacity: 0.9;
+    }
+    #restart-btn {
+      background: #4ecdc4;
+      border: none;
+      color: #1a1a2e;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 14px 36px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s;
+    }
+    #restart-btn:hover {
+      background: #45b7aa;
+      transform: scale(1.05);
+    }
+    #hint {
+      position: absolute;
+      bottom: 30px;
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+      <div id="score">0</div>
+      <div id="game-over">
+        <h1>Игра окончена</h1>
+        <p>Счёт: <span id="final-score">0</span></p>
+        <button id="restart-btn">Играть снова</button>
+      </div>
+      <div id="hint">← → или A D · на телефоне свайп</div>
+    </div>
+  </div>
+
+  <script>
+    // =====================================================
+    //  DOODLE JUMP CLONE — полностью рабочая версия
+    //  Замени ассеты в разделе ASSETS ниже
+    // =====================================================
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const gameOverEl = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('final-score');
+    const restartBtn = document.getElementById('restart-btn');
+    const hintEl = document.getElementById('hint');
+
+    // ---------- НАСТРОЙКИ ----------
+    const WIDTH = 400;
+    const HEIGHT = 700;
+    const GRAVITY = 0.35;
+    const JUMP_FORCE = -13.5;
+    const MOVE_SPEED = 6.2;
+    const PLATFORM_WIDTH = 70;
+    const PLATFORM_HEIGHT = 16;
+    const PLAYER_WIDTH = 40;
+    const PLAYER_HEIGHT = 50;
+
+    // =====================================================
+    //  СПРАЙТЫ (ASSETS)
+    // =====================================================
+    // Игра автоматически пытается загрузить картинки из папки assets/
+    // Если файла нет или он не загрузился — используется стандартная отрисовка (фигуры).
+    //
+    // Список всех спрайтов:
+    //
+    //   assets/player.png              — игрок (рекомендуемый размер ~80x100)
+    //   assets/platform.png            — обычная платформа (~140x32)
+    //   assets/platform_broken.png     — ломающаяся платформа
+    //   assets/platform_moving.png     — двигающаяся платформа
+    //   assets/spring.png              — пружина / супер-прыжок
+    //   assets/background.png          — фон (любой размер, будет растянут)
+    //
+    // Просто положи файлы с этими именами в папку assets рядом с index.html
+    // =====================================================
+
+    const ASSETS = {
+      player:          'assets/player.png',
+      platform:        'assets/platform.png',
+      platformBroken:  'assets/platform_broken.png',
+      platformMoving:  'assets/platform_moving.png',
+      spring:          'assets/spring.png',
+      background:      'assets/background.png'
+    };
+
+    let playerImg = null;
+    let platformImg = null;
+    let brokenPlatformImg = null;
+    let movingPlatformImg = null;
+    let springImg = null;
+    let bgImg = null;
+
+    // Загрузка с автоматическим fallback
+    function loadImage(src) {
+      const img = new Image();
+      img.src = src;
+      // Если файл не найден — img.complete будет false / naturalWidth = 0
+      // Мы проверяем это при отрисовке
+      return img;
+    }
+
+    playerImg         = loadImage(ASSETS.player);
+    platformImg       = loadImage(ASSETS.platform);
+    brokenPlatformImg = loadImage(ASSETS.platformBroken);
+    movingPlatformImg = loadImage(ASSETS.platformMoving);
+    springImg         = loadImage(ASSETS.spring);
+    bgImg             = loadImage(ASSETS.background);
+
+    // Проверка, что картинка реально загрузилась
+    function isImageReady(img) {
+      return img && img.complete && img.naturalWidth > 0;
+    }
+
+    // ---------- СОСТОЯНИЕ ИГРЫ ----------
+    let player = {
+      x: WIDTH / 2 - PLAYER_WIDTH / 2,
+      y: HEIGHT - 150,
+      vx: 0,
+      vy: 0,
+      width: PLAYER_WIDTH,
+      height: PLAYER_HEIGHT,
+      facing: 1 // 1 = right, -1 = left
+    };
+
+    let platforms = [];
+    let cameraY = 0;          // насколько мир сдвинут вверх
+    let maxHeight = 0;        // максимальная достигнутая высота
+    let score = 0;
+    let gameState = 'playing'; // 'playing' | 'gameover'
+    let keys = { left: false, right: false };
+    let touchX = null;
+
+    // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+    function resize() {
+      const scale = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
+      canvas.width = WIDTH;
+      canvas.height = HEIGHT;
+      canvas.style.width = Math.floor(WIDTH * scale) + 'px';
+      canvas.style.height = Math.floor(HEIGHT * scale) + 'px';
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ---------- ГЕНЕРАЦИЯ ПЛАТФОРМ ----------
+    function createPlatform(y, type = null) {
+      const types = ['normal', 'normal', 'normal', 'moving', 'breaking', 'spring'];
+      const t = type || types[Math.floor(Math.random() * types.length)];
+
+      return {
+        x: Math.random() * (WIDTH - PLATFORM_WIDTH),
+        y: y,
+        width: PLATFORM_WIDTH,
+        height: PLATFORM_HEIGHT,
+        type: t,
+        // для двигающихся
+        dir: Math.random() > 0.5 ? 1 : -1,
+        speed: 1.5 + Math.random() * 1.5,
+        // для ломающихся
+        broken: false,
+        breakTimer: 0
+      };
+    }
+
+    function initPlatforms() {
+      platforms = [];
+      // стартовая платформа под игроком
+      platforms.push({
+        x: WIDTH / 2 - PLATFORM_WIDTH / 2,
+        y: HEIGHT - 80,
+        width: PLATFORM_WIDTH,
+        height: PLATFORM_HEIGHT,
+        type: 'normal',
+        dir: 1,
+        speed: 0,
+        broken: false,
+        breakTimer: 0
+      });
+
+      // генерируем платформы вверх
+      let y = HEIGHT - 180;
+      while (y > -HEIGHT * 2) {
+        platforms.push(createPlatform(y));
+        y -= 50 + Math.random() * 70;
+      }
+    }
+
+    function generateMorePlatforms() {
+      // находим самую верхнюю платформу
+      let highest = platforms.reduce((min, p) => Math.min(min, p.y), Infinity);
+      while (highest > cameraY - HEIGHT) {
+        highest -= 55 + Math.random() * 75;
+        platforms.push(createPlatform(highest));
+      }
+    }
+
+    // ---------- УПРАВЛЕНИЕ ----------
+    window.addEventListener('keydown', e => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      if (e.code === 'Space' && gameState === 'gameover') restart();
+    });
+    window.addEventListener('keyup', e => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    });
+
+    // Тач / мышь
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      touchX = e.touches[0].clientX;
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (touchX !== null) {
+        const currentX = e.touches[0].clientX;
+        const dx = currentX - touchX;
+        if (dx < -8) { keys.left = true; keys.right = false; }
+        else if (dx > 8) { keys.right = true; keys.left = false; }
+        touchX = currentX;
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => {
+      keys.left = false;
+      keys.right = false;
+      touchX = null;
+    });
+
+    // Мышь (для удобства на ПК)
+    let mouseDown = false;
+    canvas.addEventListener('mousedown', e => {
+      mouseDown = true;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
+      if (mx < player.x + player.width / 2) keys.left = true;
+      else keys.right = true;
+    });
+    canvas.addEventListener('mouseup', () => {
+      mouseDown = false;
+      keys.left = false;
+      keys.right = false;
+    });
+    canvas.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
+      keys.left = mx < player.x + player.width / 2;
+      keys.right = !keys.left;
+    });
+
+    restartBtn.addEventListener('click', restart);
+
+    // ---------- ФИЗИКА И ЛОГИКА ----------
+    function update() {
+      if (gameState !== 'playing') return;
+
+      // Горизонтальное движение
+      if (keys.left) {
+        player.vx = -MOVE_SPEED;
+        player.facing = -1;
+      } else if (keys.right) {
+        player.vx = MOVE_SPEED;
+        player.facing = 1;
+      } else {
+        player.vx *= 0.85; // небольшое трение
+      }
+
+      player.x += player.vx;
+
+      // Экран зациклен по горизонтали
+      if (player.x + player.width < 0) player.x = WIDTH;
+      if (player.x > WIDTH) player.x = -player.width;
+
+      // Гравитация
+      player.vy += GRAVITY;
+      player.y += player.vy;
+
+      // Камера следует за игроком вверх
+      if (player.y < cameraY + HEIGHT * 0.4) {
+        cameraY = player.y - HEIGHT * 0.4;
+      }
+
+      // Обновление платформ
+      for (let p of platforms) {
+        if (p.type === 'moving' && !p.broken) {
+          p.x += p.dir * p.speed;
+          if (p.x <= 0 || p.x + p.width >= WIDTH) p.dir *= -1;
+        }
+        if (p.broken) {
+          p.breakTimer++;
+          p.y += 4; // падает вниз
+        }
+      }
+
+      // Коллизии с платформами (только когда падаем)
+      if (player.vy > 0) {
+        for (let p of platforms) {
+          if (p.broken) continue;
+
+          if (player.x + player.width > p.x + 8 &&
+              player.x < p.x + p.width - 8 &&
+              player.y + player.height > p.y &&
+              player.y + player.height < p.y + p.height + player.vy + 2) {
+
+            // Приземлились
+            player.y = p.y - player.height;
+            player.vy = JUMP_FORCE;
+
+            if (p.type === 'spring') {
+              player.vy = JUMP_FORCE * 1.7; // супер-прыжок
+            }
+            if (p.type === 'breaking') {
+              p.broken = true;
+              p.breakTimer = 0;
+            }
+            break;
+          }
+        }
+      }
+
+      // Подсчёт высоты
+      const currentHeight = Math.max(0, Math.floor((-cameraY) / 10));
+      if (currentHeight > maxHeight) {
+        maxHeight = currentHeight;
+        score = maxHeight;
+        scoreEl.textContent = score;
+      }
+
+      // Генерация новых платформ
+      generateMorePlatforms();
+
+      // Удаление старых платформ далеко внизу
+      platforms = platforms.filter(p => p.y < cameraY + HEIGHT + 100);
+
+      // Проверка проигрыша
+      if (player.y > cameraY + HEIGHT + 50) {
+        gameOver();
+      }
+    }
+
+    function gameOver() {
+      gameState = 'gameover';
+      finalScoreEl.textContent = score;
+      gameOverEl.style.display = 'block';
+      hintEl.style.display = 'none';
+    }
+
+    function restart() {
+      player.x = WIDTH / 2 - PLAYER_WIDTH / 2;
+      player.y = HEIGHT - 150;
+      player.vx = 0;
+      player.vy = 0;
+      cameraY = 0;
+      maxHeight = 0;
+      score = 0;
+      scoreEl.textContent = '0';
+      gameState = 'playing';
+      gameOverEl.style.display = 'none';
+      hintEl.style.display = 'block';
+      initPlatforms();
+    }
+
+    // ---------- ОТРИСОВКА ----------
+    function drawBackground() {
+      if (isImageReady(bgImg)) {
+        ctx.drawImage(bgImg, 0, 0, WIDTH, HEIGHT);
+      } else {
+        // Стандартный фон — градиент неба + облака
+        const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+        grad.addColorStop(0, '#5B9BD5');
+        grad.addColorStop(0.6, '#87CEEB');
+        grad.addColorStop(1, '#E0F7FA');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        drawCloud(60, 80 + (cameraY * 0.1) % 200, 50);
+        drawCloud(280, 180 + (cameraY * 0.15) % 250, 40);
+        drawCloud(150, 320 + (cameraY * 0.08) % 180, 55);
+      }
+    }
+
+    function drawCloud(x, y, size) {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.4, y - size * 0.15, size * 0.4, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.8, y, size * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawPlatform(p) {
+      const screenY = p.y - cameraY;
+
+      if (screenY < -50 || screenY > HEIGHT + 50) return;
+
+      if (p.broken && p.breakTimer > 8) return; // уже разлетелась
+
+      // --- Рисуем основу платформы ---
+      let baseImg = null;
+      if (p.type === 'breaking') baseImg = brokenPlatformImg;
+      else if (p.type === 'moving') baseImg = movingPlatformImg;
+      else baseImg = platformImg; // для normal и spring используем обычную платформу
+
+      if (isImageReady(baseImg)) {
+        ctx.drawImage(baseImg, p.x, screenY, p.width, p.height);
+      } else {
+        // Стандартная цветная платформа
+        ctx.fillStyle = {
+          'normal': '#4CAF50',
+          'moving': '#2196F3',
+          'breaking': '#FF9800',
+          'spring': '#4CAF50'   // пружина стоит на обычной зелёной
+        }[p.type] || '#4CAF50';
+
+        roundRect(p.x, screenY, p.width, p.height, 6);
+        ctx.fill();
+
+        // Блик
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        roundRect(p.x + 4, screenY + 2, p.width - 8, 4, 3);
+        ctx.fill();
+      }
+
+      // --- Рисуем пружину сверху (если это spring) ---
+      if (p.type === 'spring') {
+        if (isImageReady(springImg)) {
+          // Рисуем пружину с сохранением пропорций
+          // Размер пружины: ширина ~40% от платформы, высота пропорционально
+          const springW = Math.min(42, p.width * 0.55);
+          const aspect = springImg.naturalHeight / springImg.naturalWidth;
+          const springH = springW * aspect;
+
+          const springX = p.x + (p.width - springW) / 2;
+          const springY = screenY - springH + 4; // чуть заходит на платформу
+
+          ctx.drawImage(springImg, springX, springY, springW, springH);
+        } else {
+          // Стандартная пружина (если spring.png нет)
+          ctx.fillStyle = '#C2185B';
+          ctx.fillRect(p.x + p.width / 2 - 8, screenY - 14, 16, 14);
+          ctx.fillStyle = '#F48FB1';
+          ctx.fillRect(p.x + p.width / 2 - 6, screenY - 11, 12, 10);
+        }
+      }
+    }
+
+    function drawPlayer() {
+      const screenY = player.y - cameraY;
+
+      if (isImageReady(playerImg)) {
+        // Сохраняем пропорции спрайта
+        // Высоту фиксируем под PLAYER_HEIGHT, ширину считаем по aspect ratio
+        const aspect = playerImg.naturalWidth / playerImg.naturalHeight;
+        const drawH = PLAYER_HEIGHT;
+        const drawW = drawH * aspect;
+
+        // Центрируем по горизонтали относительно коллизии
+        const drawX = player.x + (player.width - drawW) / 2;
+        const drawY = screenY;
+
+        ctx.save();
+        if (player.facing === -1) {
+          ctx.translate(drawX + drawW, drawY);
+          ctx.scale(-1, 1);
+          ctx.drawImage(playerImg, 0, 0, drawW, drawH);
+        } else {
+          ctx.drawImage(playerImg, drawX, drawY, drawW, drawH);
+        }
+        ctx.restore();
+      } else {
+        // Стандартный персонаж (если player.png нет)
+        ctx.save();
+        ctx.translate(player.x + player.width / 2, screenY + player.height / 2);
+        if (player.facing === -1) ctx.scale(-1, 1);
+
+        // Тело
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Глаза
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(6, -6, 4, 0, Math.PI * 2);
+        ctx.arc(14, -6, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Зрачки
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(7, -7, 1.5, 0, Math.PI * 2);
+        ctx.arc(15, -7, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Улыбка
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(10, 2, 6, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+
+        // Ноги
+        ctx.fillStyle = '#FBC02D';
+        ctx.fillRect(-12, 16, 8, 10);
+        ctx.fillRect(4, 16, 8, 10);
+
+        ctx.restore();
+      }
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      drawBackground();
+
+      // Платформы
+      for (let p of platforms) {
+        drawPlatform(p);
+      }
+
+      // Игрок
+      drawPlayer();
+
+      // Небольшой виньет-эффект
+      const vignette = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, HEIGHT*0.3, WIDTH/2, HEIGHT/2, HEIGHT*0.9);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.15)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    // ---------- ГЛАВНЫЙ ЦИКЛ ----------
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Старт
+    initPlatforms();
+    loop();
+  </script>
+</body>
+</html>
