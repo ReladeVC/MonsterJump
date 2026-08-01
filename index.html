@@ -34,6 +34,8 @@
       box-shadow: 0 0 40px rgba(0,0,0,0.5);
       max-width: 100%;
       max-height: 100%;
+      /* Мягкое сглаживание — без шума и пикселизации */
+      image-rendering: auto;
     }
     #ui {
       position: absolute;
@@ -257,6 +259,10 @@
       canvas.height = HEIGHT;
       canvas.style.width = Math.floor(WIDTH * scale) + 'px';
       canvas.style.height = Math.floor(HEIGHT * scale) + 'px';
+
+      // Мягкое сглаживание — спрайты выглядят чисто и гармонично
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
     }
     window.addEventListener('resize', resize);
     resize();
@@ -568,9 +574,17 @@
     // ---------- ОТРИСОВКА ----------
     function drawBackground() {
       if (isImageReady(bgImg)) {
-        ctx.drawImage(bgImg, 0, 0, WIDTH, HEIGHT);
+        // Параллакс: фон скроллится медленнее камеры (0.3x)
+        const parallax = 0.3;
+        const bgH = HEIGHT;
+        let offset = (-cameraY * parallax) % bgH;
+        if (offset > 0) offset -= bgH;
+
+        for (let i = -1; i <= 2; i++) {
+          ctx.drawImage(bgImg, 0, offset + i * bgH, WIDTH, bgH);
+        }
       } else {
-        // Стандартный фон — градиент неба + облака
+        // Стандартный фон — градиент + облака с параллаксом
         const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
         grad.addColorStop(0, '#5B9BD5');
         grad.addColorStop(0.6, '#87CEEB');
@@ -578,10 +592,12 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        drawCloud(60, 80 + (cameraY * 0.1) % 200, 50);
-        drawCloud(280, 180 + (cameraY * 0.15) % 250, 40);
-        drawCloud(150, 320 + (cameraY * 0.08) % 180, 55);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        drawCloud(60,  (80  + cameraY * 0.08) % (HEIGHT + 100) - 50, 50);
+        drawCloud(280, (180 + cameraY * 0.12) % (HEIGHT + 120) - 50, 40);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        drawCloud(150, (320 + cameraY * 0.18) % (HEIGHT + 80)  - 50, 55);
+        drawCloud(320, (450 + cameraY * 0.15) % (HEIGHT + 100) - 50, 35);
       }
     }
 
@@ -600,27 +616,31 @@
 
       if (p.broken && p.breakTimer > 8) return; // уже разлетелась
 
+      // Мягкая тень под платформой (объём)
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      ctx.ellipse(p.x + p.width / 2, screenY + p.height + 4, p.width * 0.42, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       // --- Рисуем основу платформы ---
       let baseImg = null;
       if (p.type === 'breaking') baseImg = brokenPlatformImg;
       else if (p.type === 'moving') baseImg = movingPlatformImg;
-      else baseImg = platformImg; // для normal и spring используем обычную платформу
+      else baseImg = platformImg;
 
       if (isImageReady(baseImg)) {
         ctx.drawImage(baseImg, p.x, screenY, p.width, p.height);
       } else {
-        // Стандартная цветная платформа
         ctx.fillStyle = {
           'normal': '#4CAF50',
           'moving': '#2196F3',
           'breaking': '#FF9800',
-          'spring': '#4CAF50'   // пружина стоит на обычной зелёной
+          'spring': '#4CAF50'
         }[p.type] || '#4CAF50';
 
         roundRect(p.x, screenY, p.width, p.height, 6);
         ctx.fill();
 
-        // Блик
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
         roundRect(p.x + 4, screenY + 2, p.width - 8, 4, 3);
         ctx.fill();
@@ -720,6 +740,19 @@
       // Наклон при движении влево/вправо (эффект перемещения)
       const tilt = Math.max(-0.25, Math.min(0.25, player.vx * 0.04));
 
+      // Мягкая тень под персонажем (объём)
+      const shadowScale = scale;
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(
+        player.x + player.width / 2,
+        screenY + player.height + 3,
+        16 * shadowScale,
+        5 * Math.min(shadowScale, 1.5),
+        0, 0, Math.PI * 2
+      );
+      ctx.fill();
+
       if (isImageReady(img)) {
         // Сохраняем пропорции + учитываем бонус-скейл
         const aspect = img.naturalWidth / img.naturalHeight;
@@ -730,14 +763,23 @@
         const drawX = player.x + (player.width - drawW) / 2;
         const drawY = screenY + player.height - drawH;
 
-        // Центр для поворота (примерно середина персонажа)
+        // Центр для поворота (ближе к ногам)
         const cx = drawX + drawW / 2;
-        const cy = drawY + drawH * 0.7; // точка вращения ближе к ногам
+        const cy = drawY + drawH * 0.7;
 
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(tilt);
+
+        // Лёгкое свечение по контуру — отделяет от фона и даёт объём
+        ctx.shadowColor = 'rgba(0,0,0,0.25)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 2;
+
         ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
+
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
         ctx.restore();
       } else {
         // Стандартный персонаж
@@ -783,15 +825,25 @@
       const screenY = b.y - cameraY;
       if (screenY < -40 || screenY > HEIGHT + 40) return;
 
+      // Мягкое свечение под бонусом
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+      ctx.beginPath();
+      ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 22, 0, Math.PI * 2);
+      ctx.fill();
+
       if (isImageReady(bonusImg)) {
-        // Сохраняем пропорции
         const aspect = bonusImg.naturalWidth / bonusImg.naturalHeight;
         const h = b.height;
         const w = h * aspect;
         const x = b.x + (b.width - w) / 2;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(255, 180, 0, 0.4)';
+        ctx.shadowBlur = 10;
         ctx.drawImage(bonusImg, x, screenY, w, h);
+        ctx.shadowBlur = 0;
+        ctx.restore();
       } else {
-        // Fallback — золотая звезда/круг
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
         ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 16, 0, Math.PI * 2);
