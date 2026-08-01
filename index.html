@@ -167,6 +167,7 @@
     //   assets/spring.png              — пружина
     //   assets/bonus.png               — бонус (увеличивает персонажа)
     //   assets/background.png          — фон
+    //   assets/music.mp3               — фоновая музыка
     // =====================================================
 
     const ASSETS = {
@@ -180,7 +181,8 @@
       platformMoving:  'assets/platform_moving.png',
       spring:          'assets/spring.png',
       bonus:           'assets/bonus.png',
-      background:      'assets/background.png'
+      background:      'assets/background.png',
+      music:           'assets/music.mp3'
     };
 
     let titleNameImg = null;
@@ -279,6 +281,38 @@
 
     // Пауза
     let isPaused = false;
+
+    // ---------- МУЗЫКА ----------
+    let musicEnabled = true;
+    let musicStarted = false;
+    const music = new Audio(ASSETS.music);
+    music.loop = true;
+    music.volume = 0.35; // тише, чтобы были слышны звуки прыжков
+    music.preload = 'auto';
+
+    function startMusic() {
+      if (!musicEnabled) return;
+      music.play().then(() => {
+        musicStarted = true;
+      }).catch(() => {
+        // Браузер может заблокировать автозапуск — запустим при следующем клике
+      });
+    }
+
+    function stopMusic() {
+      music.pause();
+      music.currentTime = 0;
+      musicStarted = false;
+    }
+
+    function toggleMusic() {
+      musicEnabled = !musicEnabled;
+      if (musicEnabled) {
+        startMusic();
+      } else {
+        music.pause();
+      }
+    }
 
     // ---------- ЗВУК (Web Audio API) ----------
     let audioCtx = null;
@@ -660,6 +694,7 @@
     function startGame() {
       // Разблокируем звук (браузеры требуют жест пользователя)
       getAudioCtx();
+      startMusic();
 
       // Устанавливаем выбранного персонажа
       currentPlayerImg = playerImgs[selectedCharacter];
@@ -1147,6 +1182,9 @@
         titleLayout._btnW = titleLayout.startBtnW;
         titleLayout._btnH = titleLayout.startBtnH;
       }
+
+      // Кнопка музыки на титуле
+      drawHUDButtons();
     }
 
     function draw() {
@@ -1191,8 +1229,8 @@
         ctx.fill();
       }
 
-      // Кнопка паузы (правый верхний угол)
-      drawPauseButton();
+      // Кнопки паузы и музыки (правый верхний угол)
+      drawHUDButtons();
 
       // Оверлей паузы
       if (isPaused) {
@@ -1215,29 +1253,73 @@
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
     }
 
-    // Кнопка паузы
+    // Кнопки UI
     const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
+    const musicBtn = { x: WIDTH - 96, y: 16, size: 36 };
 
-    function drawPauseButton() {
-      if (gameState !== 'playing') return;
-      const { x, y, size } = pauseBtn;
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      roundRect(x, y, size, size, 8);
-      ctx.fill();
+    function drawHUDButtons() {
+      // --- Пауза (только в игре) ---
+      if (gameState === 'playing') {
+        const { x, y, size } = pauseBtn;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        roundRect(x, y, size, size, 8);
+        ctx.fill();
 
-      ctx.fillStyle = '#fff';
-      if (isPaused) {
-        // Иконка Play
+        ctx.fillStyle = '#fff';
+        if (isPaused) {
+          ctx.beginPath();
+          ctx.moveTo(x + 12, y + 10);
+          ctx.lineTo(x + 12, y + size - 10);
+          ctx.lineTo(x + size - 10, y + size / 2);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillRect(x + 11, y + 10, 5, size - 20);
+          ctx.fillRect(x + 20, y + 10, 5, size - 20);
+        }
+      }
+
+      // --- Музыка (титул + игра) ---
+      if (gameState === 'title' || gameState === 'playing') {
+        const { x, y, size } = musicBtn;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        roundRect(x, y, size, size, 8);
+        ctx.fill();
+
+        ctx.fillStyle = musicEnabled ? '#fff' : '#ff6b6b';
+        // Иконка ноты / динамика
+        const cx = x + size / 2;
+        const cy = y + size / 2;
+        // Корпус динамика
         ctx.beginPath();
-        ctx.moveTo(x + 12, y + 10);
-        ctx.lineTo(x + 12, y + size - 10);
-        ctx.lineTo(x + size - 10, y + size / 2);
+        ctx.moveTo(cx - 8, cy - 5);
+        ctx.lineTo(cx - 2, cy - 5);
+        ctx.lineTo(cx + 5, cy - 11);
+        ctx.lineTo(cx + 5, cy + 11);
+        ctx.lineTo(cx - 2, cy + 5);
+        ctx.lineTo(cx - 8, cy + 5);
         ctx.closePath();
         ctx.fill();
-      } else {
-        // Иконка Pause ||
-        ctx.fillRect(x + 11, y + 10, 5, size - 20);
-        ctx.fillRect(x + 20, y + 10, 5, size - 20);
+
+        if (musicEnabled) {
+          // Волны звука
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx + 6, cy, 5, -0.7, 0.7);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(cx + 6, cy, 9, -0.7, 0.7);
+          ctx.stroke();
+        } else {
+          // Перечёркнуто
+          ctx.strokeStyle = '#ff6b6b';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(x + 8, y + size - 8);
+          ctx.lineTo(x + size - 8, y + 8);
+          ctx.stroke();
+        }
       }
     }
 
@@ -1248,6 +1330,18 @@
       const scaleY = HEIGHT / rect.height;
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
+
+      // Любой клик на титуле — пробуем запустить музыку
+      startMusic();
+
+      // Кнопка музыки на титуле
+      {
+        const { x, y, size } = musicBtn;
+        if (mx >= x && mx <= x + size && my >= y && my <= y + size) {
+          toggleMusic();
+          return;
+        }
+      }
 
       // Клик по персонажам
       const positions = getCharPositions();
@@ -1279,15 +1373,24 @@
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
 
-      // Кнопка паузы
       if (gameState === 'playing') {
-        const { x, y, size } = pauseBtn;
-        if (mx >= x && mx <= x + size && my >= y && my <= y + size) {
-          isPaused = !isPaused;
-          // Сбрасываем управление при паузе
-          keys.left = false;
-          keys.right = false;
-          return;
+        // Кнопка паузы
+        {
+          const { x, y, size } = pauseBtn;
+          if (mx >= x && mx <= x + size && my >= y && my <= y + size) {
+            isPaused = !isPaused;
+            keys.left = false;
+            keys.right = false;
+            return;
+          }
+        }
+        // Кнопка музыки
+        {
+          const { x, y, size } = musicBtn;
+          if (mx >= x && mx <= x + size && my >= y && my <= y + size) {
+            toggleMusic();
+            return;
+          }
         }
       }
     }
