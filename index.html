@@ -55,6 +55,7 @@
       background: rgba(0,0,0,0.25);
       padding: 8px 22px;
       border-radius: 20px;
+      display: none; /* скрыт на титульном экране */
     }
     #game-over {
       display: none;
@@ -102,6 +103,7 @@
       font-size: 14px;
       text-align: center;
       pointer-events: none;
+      display: none;
     }
   </style>
 </head>
@@ -148,53 +150,69 @@
     //  СПРАЙТЫ (ASSETS)
     // =====================================================
     // Игра автоматически пытается загрузить картинки из папки assets/
-    // Если файла нет или он не загрузился — используется стандартная отрисовка (фигуры).
+    // Если файла нет или он не загрузился — используется стандартная отрисовка.
     //
     // Список всех спрайтов:
     //
-    //   assets/player.png              — игрок (рекомендуемый размер ~80x100)
-    //   assets/platform.png            — обычная платформа (~140x32)
+    //   assets/titlename.png           — название "Monster Jump"
+    //   assets/start.png               — кнопка Старт
+    //   assets/player.png              — персонаж 1
+    //   assets/player2.png             — персонаж 2
+    //   assets/player3.png             — персонаж 3
+    //   assets/platform.png            — обычная платформа
     //   assets/platform_broken.png     — ломающаяся платформа
     //   assets/platform_moving.png     — двигающаяся платформа
-    //   assets/spring.png              — пружина / супер-прыжок
-    //   assets/background.png          — фон (любой размер, будет растянут)
-    //
-    // Просто положи файлы с этими именами в папку assets рядом с index.html
+    //   assets/spring.png              — пружина
+    //   assets/bonus.png               — бонус (увеличивает персонажа)
+    //   assets/background.png          — фон
     // =====================================================
 
     const ASSETS = {
+      titleName:       'assets/titlename.png',
+      startBtn:        'assets/start.png',
       player:          'assets/player.png',
+      player2:         'assets/player2.png',
+      player3:         'assets/player3.png',
       platform:        'assets/platform.png',
       platformBroken:  'assets/platform_broken.png',
       platformMoving:  'assets/platform_moving.png',
       spring:          'assets/spring.png',
+      bonus:           'assets/bonus.png',
       background:      'assets/background.png'
     };
 
-    let playerImg = null;
+    let titleNameImg = null;
+    let startBtnImg = null;
+    let playerImgs = [null, null, null]; // 3 персонажа
     let platformImg = null;
     let brokenPlatformImg = null;
     let movingPlatformImg = null;
     let springImg = null;
+    let bonusImg = null;
     let bgImg = null;
 
-    // Загрузка с автоматическим fallback
+    // Текущий выбранный персонаж (0, 1 или 2)
+    let selectedCharacter = 0;
+    let currentPlayerImg = null; // будет установлен при старте
+
     function loadImage(src) {
       const img = new Image();
       img.src = src;
-      // Если файл не найден — img.complete будет false / naturalWidth = 0
-      // Мы проверяем это при отрисовке
       return img;
     }
 
-    playerImg         = loadImage(ASSETS.player);
+    titleNameImg      = loadImage(ASSETS.titleName);
+    startBtnImg       = loadImage(ASSETS.startBtn);
+    playerImgs[0]     = loadImage(ASSETS.player);
+    playerImgs[1]     = loadImage(ASSETS.player2);
+    playerImgs[2]     = loadImage(ASSETS.player3);
     platformImg       = loadImage(ASSETS.platform);
     brokenPlatformImg = loadImage(ASSETS.platformBroken);
     movingPlatformImg = loadImage(ASSETS.platformMoving);
     springImg         = loadImage(ASSETS.spring);
+    bonusImg          = loadImage(ASSETS.bonus);
     bgImg             = loadImage(ASSETS.background);
 
-    // Проверка, что картинка реально загрузилась
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
     }
@@ -207,16 +225,30 @@
       vy: 0,
       width: PLAYER_WIDTH,
       height: PLAYER_HEIGHT,
-      facing: 1 // 1 = right, -1 = left
+      facing: 1
     };
 
     let platforms = [];
-    let cameraY = 0;          // насколько мир сдвинут вверх
-    let maxHeight = 0;        // максимальная достигнутая высота
+    let bonuses = [];          // бонусы в мире
+    let cameraY = 0;
+    let maxHeight = 0;
     let score = 0;
-    let gameState = 'playing'; // 'playing' | 'gameover'
+    let gameState = 'title'; // 'title' | 'playing' | 'gameover'
     let keys = { left: false, right: false };
     let touchX = null;
+
+    // Бонус-эффект
+    let bonusActive = false;
+    let bonusTimer = 0;        // оставшееся время в кадрах (~60fps * 5 = 300)
+    const BONUS_DURATION = 300; // 5 секунд
+    const BONUS_SCALE = 4;
+    const BONUS_FLY_FORCE = -11; // постоянная сила вверх во время бонуса
+
+    // Частицы (звёздочки) при бонусе
+    let particles = [];
+
+    // Пауза
+    let isPaused = false;
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     function resize() {
@@ -249,8 +281,22 @@
       };
     }
 
+    function createBonus(x, y) {
+      return {
+        x: x,
+        y: y,
+        width: 36,
+        height: 36,
+        collected: false
+      };
+    }
+
     function initPlatforms() {
       platforms = [];
+      bonuses = [];
+      bonusActive = false;
+      bonusTimer = 0;
+
       // стартовая платформа под игроком
       platforms.push({
         x: WIDTH / 2 - PLATFORM_WIDTH / 2,
@@ -268,16 +314,31 @@
       let y = HEIGHT - 180;
       while (y > -HEIGHT * 2) {
         platforms.push(createPlatform(y));
+        // Иногда ставим бонус над платформой
+        if (Math.random() < 0.12) {
+          const last = platforms[platforms.length - 1];
+          bonuses.push(createBonus(
+            last.x + last.width / 2 - 18,
+            last.y - 50
+          ));
+        }
         y -= 50 + Math.random() * 70;
       }
     }
 
     function generateMorePlatforms() {
-      // находим самую верхнюю платформу
       let highest = platforms.reduce((min, p) => Math.min(min, p.y), Infinity);
       while (highest > cameraY - HEIGHT) {
         highest -= 55 + Math.random() * 75;
         platforms.push(createPlatform(highest));
+        // Шанс бонуса ~12%, но НЕ во время действия бонуса
+        if (!bonusActive && Math.random() < 0.12) {
+          const last = platforms[platforms.length - 1];
+          bonuses.push(createBonus(
+            last.x + last.width / 2 - 18,
+            last.y - 50
+          ));
+        }
       }
     }
 
@@ -292,19 +353,24 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     });
 
-    // Тач / мышь
+    // Тач (сниженная чувствительность)
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
+      if (gameState !== 'playing') return;
       touchX = e.touches[0].clientX;
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      if (touchX !== null) {
-        const currentX = e.touches[0].clientX;
-        const dx = currentX - touchX;
-        if (dx < -8) { keys.left = true; keys.right = false; }
-        else if (dx > 8) { keys.right = true; keys.left = false; }
-        touchX = currentX;
+      if (gameState !== 'playing' || touchX === null) return;
+      const currentX = e.touches[0].clientX;
+      const dx = currentX - touchX;
+      // Порог увеличен: нужно сдвинуть палец сильнее
+      if (dx < -22) { keys.left = true; keys.right = false; touchX = currentX; }
+      else if (dx > 22) { keys.right = true; keys.left = false; touchX = currentX; }
+      // Небольшой дрейф — сбрасываем направление
+      else if (Math.abs(dx) < 6) {
+        keys.left = false;
+        keys.right = false;
       }
     }, { passive: false });
     canvas.addEventListener('touchend', () => {
@@ -339,9 +405,22 @@
 
     // ---------- ФИЗИКА И ЛОГИКА ----------
     function update() {
-      if (gameState !== 'playing') return;
+      if (gameState !== 'playing' || isPaused) return;
 
-      // Горизонтальное движение
+      // --- Бонус-эффект ---
+      if (bonusActive) {
+        bonusTimer--;
+        // Постоянный полёт вверх (как от пружины)
+        player.vy = BONUS_FLY_FORCE;
+        // Звёздочки эффекта скорости
+        spawnBonusParticles();
+        if (bonusTimer <= 0) {
+          bonusActive = false;
+        }
+      }
+      updateParticles();
+
+      // Горизонтальное движение (работает и во время бонуса)
       if (keys.left) {
         player.vx = -MOVE_SPEED;
         player.facing = -1;
@@ -349,7 +428,7 @@
         player.vx = MOVE_SPEED;
         player.facing = 1;
       } else {
-        player.vx *= 0.85; // небольшое трение
+        player.vx *= 0.85;
       }
 
       player.x += player.vx;
@@ -358,8 +437,10 @@
       if (player.x + player.width < 0) player.x = WIDTH;
       if (player.x > WIDTH) player.x = -player.width;
 
-      // Гравитация
-      player.vy += GRAVITY;
+      // Гравитация (не применяется во время бонуса)
+      if (!bonusActive) {
+        player.vy += GRAVITY;
+      }
       player.y += player.vy;
 
       // Камера следует за игроком вверх
@@ -375,12 +456,30 @@
         }
         if (p.broken) {
           p.breakTimer++;
-          p.y += 4; // падает вниз
+          p.y += 4;
         }
       }
 
-      // Коллизии с платформами (только когда падаем)
-      if (player.vy > 0) {
+      // Коллизии с бонусами (не подбираем новые во время действия бонуса)
+      if (!bonusActive) {
+        for (let b of bonuses) {
+          if (b.collected) continue;
+          if (player.x < b.x + b.width &&
+              player.x + player.width > b.x &&
+              player.y < b.y + b.height &&
+              player.y + player.height > b.y) {
+            // Поймали бонус!
+            b.collected = true;
+            bonusActive = true;
+            bonusTimer = BONUS_DURATION;
+            // Размер коллизии НЕ меняем и позицию НЕ сдвигаем —
+            // только визуальный скейл в drawPlayer
+          }
+        }
+      }
+
+      // Коллизии с платформами (только когда падаем и бонус НЕ активен)
+      if (player.vy > 0 && !bonusActive) {
         for (let p of platforms) {
           if (p.broken) continue;
 
@@ -389,12 +488,11 @@
               player.y + player.height > p.y &&
               player.y + player.height < p.y + p.height + player.vy + 2) {
 
-            // Приземлились
             player.y = p.y - player.height;
             player.vy = JUMP_FORCE;
 
             if (p.type === 'spring') {
-              player.vy = JUMP_FORCE * 1.7; // супер-прыжок
+              player.vy = JUMP_FORCE * 1.7;
             }
             if (p.type === 'breaking') {
               p.broken = true;
@@ -416,11 +514,12 @@
       // Генерация новых платформ
       generateMorePlatforms();
 
-      // Удаление старых платформ далеко внизу
+      // Удаление старых объектов далеко внизу
       platforms = platforms.filter(p => p.y < cameraY + HEIGHT + 100);
+      bonuses = bonuses.filter(b => !b.collected && b.y < cameraY + HEIGHT + 100);
 
-      // Проверка проигрыша
-      if (player.y > cameraY + HEIGHT + 50) {
+      // Проверка проигрыша (во время бонуса не проигрываем)
+      if (!bonusActive && player.y > cameraY + HEIGHT + 50) {
         gameOver();
       }
     }
@@ -430,21 +529,40 @@
       finalScoreEl.textContent = score;
       gameOverEl.style.display = 'block';
       hintEl.style.display = 'none';
+      scoreEl.style.display = 'none';
     }
 
-    function restart() {
+    function startGame() {
+      // Устанавливаем выбранного персонажа
+      currentPlayerImg = playerImgs[selectedCharacter];
+
       player.x = WIDTH / 2 - PLAYER_WIDTH / 2;
       player.y = HEIGHT - 150;
       player.vx = 0;
       player.vy = 0;
+      player.width = PLAYER_WIDTH;
+      player.height = PLAYER_HEIGHT;
       cameraY = 0;
       maxHeight = 0;
       score = 0;
+      bonusActive = false;
+      bonusTimer = 0;
+      particles = [];
+      isPaused = false;
       scoreEl.textContent = '0';
+      scoreEl.style.display = 'block';
       gameState = 'playing';
       gameOverEl.style.display = 'none';
       hintEl.style.display = 'block';
       initPlatforms();
+    }
+
+    function restart() {
+      // После game over возвращаемся на титульный экран
+      gameState = 'title';
+      gameOverEl.style.display = 'none';
+      scoreEl.style.display = 'none';
+      hintEl.style.display = 'none';
     }
 
     // ---------- ОТРИСОВКА ----------
@@ -531,68 +649,157 @@
       }
     }
 
+    // ---------- ЧАСТИЦЫ (звёздочки при бонусе) ----------
+    function spawnBonusParticles() {
+      // 2-3 звёздочки за кадр
+      for (let i = 0; i < 3; i++) {
+        particles.push({
+          x: player.x + player.width / 2 + (Math.random() - 0.5) * 40,
+          y: player.y + player.height / 2 + (Math.random() - 0.5) * 30,
+          vx: (Math.random() - 0.5) * 3,
+          vy: Math.random() * 4 + 2, // летят вниз относительно персонажа
+          life: 25 + Math.random() * 20,
+          maxLife: 45,
+          size: 3 + Math.random() * 5,
+          rot: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.3
+        });
+      }
+      // Ограничиваем количество
+      if (particles.length > 80) particles.splice(0, particles.length - 80);
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        p.rot += p.rotSpeed;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        const screenY = p.y - cameraY;
+        if (screenY < -20 || screenY > HEIGHT + 20) continue;
+        const alpha = Math.max(0, p.life / p.maxLife);
+        ctx.save();
+        ctx.translate(p.x, screenY);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = alpha;
+        // Звёздочка
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+          const r = i % 2 === 0 ? p.size : p.size * 0.4;
+          const px = Math.cos(angle) * r;
+          const py = Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // Блик
+        ctx.fillStyle = '#FFFde7';
+        ctx.beginPath();
+        ctx.arc(0, 0, p.size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     function drawPlayer() {
       const screenY = player.y - cameraY;
+      const img = currentPlayerImg;
+      const scale = bonusActive ? BONUS_SCALE : 1;
 
-      if (isImageReady(playerImg)) {
-        // Сохраняем пропорции спрайта
-        // Высоту фиксируем под PLAYER_HEIGHT, ширину считаем по aspect ratio
-        const aspect = playerImg.naturalWidth / playerImg.naturalHeight;
-        const drawH = PLAYER_HEIGHT;
+      // Наклон при движении влево/вправо (эффект перемещения)
+      const tilt = Math.max(-0.25, Math.min(0.25, player.vx * 0.04));
+
+      if (isImageReady(img)) {
+        // Сохраняем пропорции + учитываем бонус-скейл
+        const aspect = img.naturalWidth / img.naturalHeight;
+        const drawH = PLAYER_HEIGHT * scale;
         const drawW = drawH * aspect;
 
-        // Центрируем по горизонтали относительно коллизии
+        // Ноги остаются на месте (растём вверх и в стороны)
         const drawX = player.x + (player.width - drawW) / 2;
-        const drawY = screenY;
+        const drawY = screenY + player.height - drawH;
+
+        // Центр для поворота (примерно середина персонажа)
+        const cx = drawX + drawW / 2;
+        const cy = drawY + drawH * 0.7; // точка вращения ближе к ногам
 
         ctx.save();
-        if (player.facing === -1) {
-          ctx.translate(drawX + drawW, drawY);
-          ctx.scale(-1, 1);
-          ctx.drawImage(playerImg, 0, 0, drawW, drawH);
-        } else {
-          ctx.drawImage(playerImg, drawX, drawY, drawW, drawH);
-        }
+        ctx.translate(cx, cy);
+        ctx.rotate(tilt);
+        ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
         ctx.restore();
       } else {
-        // Стандартный персонаж (если player.png нет)
+        // Стандартный персонаж
         ctx.save();
-        ctx.translate(player.x + player.width / 2, screenY + player.height / 2);
-        if (player.facing === -1) ctx.scale(-1, 1);
+        const offsetY = bonusActive ? -(PLAYER_HEIGHT * (scale - 1)) / 2 : 0;
+        ctx.translate(player.x + player.width / 2, screenY + player.height / 2 + offsetY);
+        ctx.rotate(tilt);
+        ctx.scale(scale, scale);
 
-        // Тело
         ctx.fillStyle = '#FFEB3B';
         ctx.beginPath();
         ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Глаза
         ctx.fillStyle = '#333';
         ctx.beginPath();
         ctx.arc(6, -6, 4, 0, Math.PI * 2);
         ctx.arc(14, -6, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        // Зрачки
         ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(7, -7, 1.5, 0, Math.PI * 2);
         ctx.arc(15, -7, 1.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Улыбка
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(10, 2, 6, 0.2, Math.PI - 0.2);
         ctx.stroke();
 
-        // Ноги
         ctx.fillStyle = '#FBC02D';
         ctx.fillRect(-12, 16, 8, 10);
         ctx.fillRect(4, 16, 8, 10);
 
         ctx.restore();
+      }
+    }
+
+    function drawBonus(b) {
+      if (b.collected) return;
+      const screenY = b.y - cameraY;
+      if (screenY < -40 || screenY > HEIGHT + 40) return;
+
+      if (isImageReady(bonusImg)) {
+        // Сохраняем пропорции
+        const aspect = bonusImg.naturalWidth / bonusImg.naturalHeight;
+        const h = b.height;
+        const w = h * aspect;
+        const x = b.x + (b.width - w) / 2;
+        ctx.drawImage(bonusImg, x, screenY, w, h);
+      } else {
+        // Fallback — золотая звезда/круг
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFA000';
+        ctx.beginPath();
+        ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 10, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -606,19 +813,216 @@
       ctx.closePath();
     }
 
+    // ---------- ТИТУЛЬНЫЙ ЭКРАН ----------
+    // Координаты элементов (для кликов)
+    const titleLayout = {
+      charSize: 90,
+      charY: 320,
+      charGap: 30,
+      startBtnW: 180,
+      startBtnH: 70,
+      startBtnY: 480
+    };
+
+    function getCharPositions() {
+      const totalW = 3 * titleLayout.charSize + 2 * titleLayout.charGap;
+      const startX = (WIDTH - totalW) / 2;
+      return [0, 1, 2].map(i => startX + i * (titleLayout.charSize + titleLayout.charGap));
+    }
+
+    function drawTitleScreen() {
+      // Фон
+      if (isImageReady(bgImg)) {
+        ctx.drawImage(bgImg, 0, 0, WIDTH, HEIGHT);
+      } else {
+        const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+        grad.addColorStop(0, '#1a1a2e');
+        grad.addColorStop(0.5, '#16213e');
+        grad.addColorStop(1, '#0f3460');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+
+      // Затемнение для читаемости
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // --- Название ---
+      if (isImageReady(titleNameImg)) {
+        const maxW = WIDTH * 0.85;
+        const aspect = titleNameImg.naturalWidth / titleNameImg.naturalHeight;
+        let tw = maxW;
+        let th = tw / aspect;
+        if (th > 140) {
+          th = 140;
+          tw = th * aspect;
+        }
+        ctx.drawImage(titleNameImg, (WIDTH - tw) / 2, 80, tw, th);
+      } else {
+        // Fallback текст
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 42px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText('Monster Jump', WIDTH / 2, 140);
+        ctx.shadowBlur = 0;
+      }
+
+      // Подпись
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '16px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Выбери персонажа', WIDTH / 2, 260);
+
+      // --- 3 персонажа ---
+      const positions = getCharPositions();
+      const colors = ['#FFEB3B', '#4FC3F7', '#FF8A65']; // fallback цвета
+
+      for (let i = 0; i < 3; i++) {
+        const x = positions[i];
+        const y = titleLayout.charY;
+        const size = titleLayout.charSize;
+        const isSelected = selectedCharacter === i;
+
+        // Рамка выбора
+        if (isSelected) {
+          ctx.strokeStyle = '#4ecdc4';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          roundRect(x - 8, y - 8, size + 16, size + 16, 12);
+          ctx.stroke();
+
+          // Подсветка
+          ctx.fillStyle = 'rgba(78, 205, 196, 0.15)';
+          roundRect(x - 8, y - 8, size + 16, size + 16, 12);
+          ctx.fill();
+        }
+
+        // Спрайт персонажа
+        const img = playerImgs[i];
+        if (isImageReady(img)) {
+          const aspect = img.naturalWidth / img.naturalHeight;
+          let dw = size;
+          let dh = size / aspect;
+          if (dh > size) {
+            dh = size;
+            dw = size * aspect;
+          }
+          const dx = x + (size - dw) / 2;
+          const dy = y + (size - dh) / 2;
+          ctx.drawImage(img, dx, dy, dw, dh);
+        } else {
+          // Fallback кружок с номером
+          ctx.fillStyle = colors[i];
+          ctx.beginPath();
+          ctx.arc(x + size / 2, y + size / 2, size / 2 - 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#333';
+          ctx.font = 'bold 28px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(i + 1), x + size / 2, y + size / 2);
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+
+      // --- Кнопка Старт ---
+      const btnX = (WIDTH - titleLayout.startBtnW) / 2;
+      const btnY = titleLayout.startBtnY;
+
+      if (isImageReady(startBtnImg)) {
+        const aspect = startBtnImg.naturalWidth / startBtnImg.naturalHeight;
+        let bw = titleLayout.startBtnW;
+        let bh = bw / aspect;
+        if (bh > 80) {
+          bh = 80;
+          bw = bh * aspect;
+        }
+        ctx.drawImage(startBtnImg, (WIDTH - bw) / 2, btnY, bw, bh);
+        // Сохраняем реальные размеры для клика
+        titleLayout._btnX = (WIDTH - bw) / 2;
+        titleLayout._btnY = btnY;
+        titleLayout._btnW = bw;
+        titleLayout._btnH = bh;
+      } else {
+        // Fallback кнопка
+        ctx.fillStyle = '#4ecdc4';
+        roundRect(btnX, btnY, titleLayout.startBtnW, titleLayout.startBtnH, 16);
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = 'bold 26px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('START', WIDTH / 2, btnY + titleLayout.startBtnH / 2);
+        ctx.textBaseline = 'alphabetic';
+
+        titleLayout._btnX = btnX;
+        titleLayout._btnY = btnY;
+        titleLayout._btnW = titleLayout.startBtnW;
+        titleLayout._btnH = titleLayout.startBtnH;
+      }
+    }
+
     function draw() {
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      if (gameState === 'title') {
+        drawTitleScreen();
+        return;
+      }
+
+      // Игровой экран
       drawBackground();
 
-      // Платформы
       for (let p of platforms) {
         drawPlatform(p);
       }
 
-      // Игрок
+      // Бонусы
+      for (let b of bonuses) {
+        drawBonus(b);
+      }
+
+      // Звёздочки (под персонажем)
+      drawParticles();
+
       drawPlayer();
 
-      // Небольшой виньет-эффект
+      // Индикатор бонуса (полоска времени)
+      if (bonusActive) {
+        const barW = 120;
+        const barH = 10;
+        const barX = (WIDTH - barW) / 2;
+        const barY = 60;
+        const progress = bonusTimer / BONUS_DURATION;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 6);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFD700';
+        roundRect(barX, barY, barW * progress, barH, 4);
+        ctx.fill();
+      }
+
+      // Кнопка паузы (правый верхний угол)
+      drawPauseButton();
+
+      // Оверлей паузы
+      if (isPaused) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('ПАУЗА', WIDTH / 2, HEIGHT / 2 - 10);
+        ctx.font = '16px Segoe UI, Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.fillText('Нажми кнопку паузы чтобы продолжить', WIDTH / 2, HEIGHT / 2 + 30);
+      }
+
+      // Виньетка
       const vignette = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, HEIGHT*0.3, WIDTH/2, HEIGHT/2, HEIGHT*0.9);
       vignette.addColorStop(0, 'rgba(0,0,0,0)');
       vignette.addColorStop(1, 'rgba(0,0,0,0.15)');
@@ -626,15 +1030,121 @@
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
     }
 
+    // Кнопка паузы
+    const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
+
+    function drawPauseButton() {
+      if (gameState !== 'playing') return;
+      const { x, y, size } = pauseBtn;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      roundRect(x, y, size, size, 8);
+      ctx.fill();
+
+      ctx.fillStyle = '#fff';
+      if (isPaused) {
+        // Иконка Play
+        ctx.beginPath();
+        ctx.moveTo(x + 12, y + 10);
+        ctx.lineTo(x + 12, y + size - 10);
+        ctx.lineTo(x + size - 10, y + size / 2);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Иконка Pause ||
+        ctx.fillRect(x + 11, y + 10, 5, size - 20);
+        ctx.fillRect(x + 20, y + 10, 5, size - 20);
+      }
+    }
+
+    // ---------- ОБРАБОТКА КЛИКОВ НА ТИТУЛЬНОМ ЭКРАНЕ ----------
+    function handleTitleClick(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = WIDTH / rect.width;
+      const scaleY = HEIGHT / rect.height;
+      const mx = (clientX - rect.left) * scaleX;
+      const my = (clientY - rect.top) * scaleY;
+
+      // Клик по персонажам
+      const positions = getCharPositions();
+      for (let i = 0; i < 3; i++) {
+        const x = positions[i];
+        const y = titleLayout.charY;
+        const size = titleLayout.charSize;
+        if (mx >= x - 8 && mx <= x + size + 8 && my >= y - 8 && my <= y + size + 8) {
+          selectedCharacter = i;
+          return;
+        }
+      }
+
+      // Клик по кнопке Старт
+      const bx = titleLayout._btnX || (WIDTH - titleLayout.startBtnW) / 2;
+      const by = titleLayout._btnY || titleLayout.startBtnY;
+      const bw = titleLayout._btnW || titleLayout.startBtnW;
+      const bh = titleLayout._btnH || titleLayout.startBtnH;
+
+      if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
+        startGame();
+      }
+    }
+
+    function handleGameClick(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = WIDTH / rect.width;
+      const scaleY = HEIGHT / rect.height;
+      const mx = (clientX - rect.left) * scaleX;
+      const my = (clientY - rect.top) * scaleY;
+
+      // Кнопка паузы
+      if (gameState === 'playing') {
+        const { x, y, size } = pauseBtn;
+        if (mx >= x && mx <= x + size && my >= y && my <= y + size) {
+          isPaused = !isPaused;
+          // Сбрасываем управление при паузе
+          keys.left = false;
+          keys.right = false;
+          return;
+        }
+      }
+    }
+
+    canvas.addEventListener('click', e => {
+      if (gameState === 'title') {
+        handleTitleClick(e.clientX, e.clientY);
+      } else if (gameState === 'playing') {
+        handleGameClick(e.clientX, e.clientY);
+      }
+    });
+
+    canvas.addEventListener('touchend', e => {
+      if (e.changedTouches.length === 0) return;
+      const t = e.changedTouches[0];
+      if (gameState === 'title') {
+        e.preventDefault();
+        handleTitleClick(t.clientX, t.clientY);
+      } else if (gameState === 'playing') {
+        handleGameClick(t.clientX, t.clientY);
+      }
+    }, { passive: false });
+
+    // Клавиша P / Escape — пауза
+    window.addEventListener('keydown', e => {
+      if ((e.code === 'KeyP' || e.code === 'Escape') && gameState === 'playing') {
+        isPaused = !isPaused;
+        keys.left = false;
+        keys.right = false;
+      }
+    });
+
     // ---------- ГЛАВНЫЙ ЦИКЛ ----------
     function loop() {
-      update();
+      if (gameState === 'playing') {
+        update();
+      }
       draw();
       requestAnimationFrame(loop);
     }
 
-    // Старт
-    initPlatforms();
+    // Старт с титульного экрана
     loop();
   </script>
 </body>
