@@ -168,7 +168,7 @@
     // Более плавные прыжки — дольше в воздухе
     const GRAVITY = 0.26;
     const JUMP_FORCE = -11.2;
-    const MOVE_SPEED = 6.4;
+    const MOVE_SPEED = 6.0;
     const PLATFORM_WIDTH = 70;   // длина как раньше
     const PLATFORM_HEIGHT = 18;  // чуть толще для читаемости
     const PLAYER_WIDTH = 60;   // +50%
@@ -207,7 +207,8 @@
       music:           'assets/music.mp3',
       lider:           'assets/Lider.png',
       gold:            'assets/gold.png',
-      bonus2:          'assets/bonus2.png'
+      bonus2:          'assets/bonus2.png',
+      bonus3:          'assets/bonus3.png'
     };
 
     let titleNameImg = null;
@@ -219,6 +220,7 @@
     let springImg = null;
     let bonusImg = null;
     let bonus2Img = null;
+    let bonus3Img = null;
     let bgImg = null;
     let bg2Img = null;
     let bg3Img = null;
@@ -277,14 +279,19 @@
     // Купленные бонусы (инвентарь)
     const BONUS1_PRICE = 500;
     const BONUS2_PRICE = 500;
+    const BONUS3_PRICE = 250;
     const ABILITY_COOLDOWN = 180; // 3 сек при 60 FPS
+    const JUMP_BOOST_DURATION = 300; // 5 сек удвоенных прыжков
     let invBonus1 = 0; // bonus.png — полёт
-    let invBonus2 = 0; // bonus2.png — водяная защита (1 падение)
-    let cdBonus1 = 0; // перезарядка полёта (после окончания эффекта)
-    let cdBonus2 = 0; // перезарядка защиты (сразу после использования)
+    let invBonus2 = 0; // bonus2.png — водяная защита
+    let invBonus3 = 0; // bonus3.png — ×2 прыжки
+    let cdBonus1 = 0;
+    let cdBonus2 = 0;
+    let cdBonus3 = 0;
+    let jumpBoostTimer = 0; // оставшееся время ×2 прыжков
 
     // Hitbox магазина бонусов (для кликов в игре)
-    let shopHit = { b1: null, buy1: null, b2: null, buy2: null };
+    let shopHit = { b1: null, buy1: null, b2: null, buy2: null, b3: null, buy3: null };
 
     let totalCoins = 0;
     let unlockedChars = [true, false, false, false, false, false];
@@ -292,6 +299,7 @@
       totalCoins = parseInt(localStorage.getItem('monsterJumpCoins') || '0', 10) || 0;
       invBonus1 = parseInt(localStorage.getItem('monsterJumpBonus1') || '0', 10) || 0;
       invBonus2 = parseInt(localStorage.getItem('monsterJumpBonus2') || '0', 10) || 0;
+      invBonus3 = parseInt(localStorage.getItem('monsterJumpBonus3') || '0', 10) || 0;
       const u = localStorage.getItem('monsterJumpUnlocks');
       if (u) {
         const arr = JSON.parse(u);
@@ -309,6 +317,7 @@
         localStorage.setItem('monsterJumpBest', String(bestScore));
         localStorage.setItem('monsterJumpBonus1', String(invBonus1));
         localStorage.setItem('monsterJumpBonus2', String(invBonus2));
+        localStorage.setItem('monsterJumpBonus3', String(invBonus3));
       } catch (e) {}
     }
 
@@ -394,6 +403,9 @@
     ]);
     bonus2Img         = loadImageWithFallback([
       'assets/bonus2.png', 'assets/Bonus2.png', 'assets/BONUS2.png'
+    ]);
+    bonus3Img         = loadImageWithFallback([
+      'assets/bonus3.png', 'assets/Bonus3.png', 'assets/BONUS3.png'
     ]);
     bgImg             = loadImage(ASSETS.background);
     bg2Img            = loadImageWithFallback([
@@ -529,7 +541,7 @@
         }
       }
       // Магазин бонусов слева
-      for (const key of ['b1', 'buy1', 'b2', 'buy2']) {
+      for (const key of ['b1', 'buy1', 'b2', 'buy2', 'b3', 'buy3']) {
         const box = shopHit[key];
         if (box && mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h) {
           return true;
@@ -842,6 +854,16 @@
         coinShake = 20;
         return false;
       }
+      if (which === 3) {
+        if (totalCoins >= BONUS3_PRICE) {
+          totalCoins -= BONUS3_PRICE;
+          invBonus3++;
+          saveProgress();
+          return true;
+        }
+        coinShake = 20;
+        return false;
+      }
       return false;
     }
 
@@ -865,6 +887,16 @@
       saveProgress();
       extraLifeReady = true;
       cdBonus2 = ABILITY_COOLDOWN;
+      playBonusSound();
+      return true;
+    }
+
+    // bonus3.png — удвоенные прыжки 5 сек; CD после окончания
+    function useBonus3() {
+      if (invBonus3 <= 0 || jumpBoostTimer > 0 || cdBonus3 > 0 || gameState !== 'playing' || isPaused) return false;
+      invBonus3--;
+      saveProgress();
+      jumpBoostTimer = JUMP_BOOST_DURATION;
       playBonusSound();
       return true;
     }
@@ -925,7 +957,7 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     });
 
-    // Тач — свайп как раньше; от одного свайпа чуть дальше
+    // Тач — свайп, лёгкая инерция
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
       if (gameState !== 'playing' || isPaused) return;
@@ -936,26 +968,27 @@
       if (gameState !== 'playing' || isPaused || touchX === null) return;
       const currentX = e.touches[0].clientX;
       const dx = currentX - touchX;
-      if (dx < -16) {
+      if (dx < -18) {
         keys.left = true;
         keys.right = false;
         touchX = currentX;
-      } else if (dx > 16) {
+      } else if (dx > 18) {
         keys.right = true;
         keys.left = false;
         touchX = currentX;
+      } else if (Math.abs(dx) < 5) {
+        keys.left = false;
+        keys.right = false;
       }
-      // Мелкий дрейф направление не сбрасывает — летит дальше
     }, { passive: false });
     canvas.addEventListener('touchend', () => {
       touchX = null;
-      // Короткая инерция после свайпа (~0.2 сек)
       setTimeout(() => {
         if (touchX === null) {
           keys.left = false;
           keys.right = false;
         }
-      }, 200);
+      }, 90);
     });
 
     // Мышь (для удобства на ПК)
@@ -1006,6 +1039,11 @@
       onPlatform = false;
       if (cdBonus1 > 0) cdBonus1--;
       if (cdBonus2 > 0) cdBonus2--;
+      if (cdBonus3 > 0) cdBonus3--;
+      if (jumpBoostTimer > 0) {
+        jumpBoostTimer--;
+        if (jumpBoostTimer <= 0) cdBonus3 = ABILITY_COOLDOWN;
+      }
 
       // --- Бонус-эффект ---
       if (bonusActive) {
@@ -1174,11 +1212,12 @@
               player.y + player.height < p.y + p.height + player.vy + 2) {
 
             player.y = p.y - player.height;
-            player.vy = JUMP_FORCE;
+            const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
+            player.vy = JUMP_FORCE * jumpMul;
             onPlatform = true;
 
             if (p.type === 'spring') {
-              player.vy = JUMP_FORCE * 1.7;
+              player.vy = JUMP_FORCE * 1.7 * jumpMul;
               playSpringSound();
             } else {
               playJumpSound();
@@ -1285,6 +1324,8 @@
       dyingTimer = 0;
       cdBonus1 = 0;
       cdBonus2 = 0;
+      cdBonus3 = 0;
+      jumpBoostTimer = 0;
       scoreEl.textContent = '0 m';
       scoreEl.style.display = 'none';
       runCoins = 0;
@@ -2119,7 +2160,7 @@
     }
 
     function drawBonusShop(anchorX, anchorY) {
-      shopHit = { b1: null, buy1: null, b2: null, buy2: null };
+      shopHit = { b1: null, buy1: null, b2: null, buy2: null, b3: null, buy3: null };
 
       // Вплотную к левому краю
       const colX = 2;
@@ -2138,8 +2179,8 @@
 
       function drawBonusCell(which, img, count) {
         const cellX = centerX(cellW);
-        const cd = which === 1 ? cdBonus1 : cdBonus2;
-        const busy = (which === 1 && bonusActive) || (which === 2 && extraLifeReady);
+        const cd = which === 1 ? cdBonus1 : (which === 2 ? cdBonus2 : cdBonus3);
+        const busy = (which === 1 && bonusActive) || (which === 2 && extraLifeReady) || (which === 3 && jumpBoostTimer > 0);
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         roundRect(cellX, y, cellW, cellH, 10);
         ctx.fill();
@@ -2164,7 +2205,7 @@
           ctx.arc(cx, cy, iconSize / 2 + 2, 0, Math.PI * 2);
           ctx.stroke();
           ctx.beginPath();
-          ctx.strokeStyle = which === 1 ? '#FFD700' : '#4FC3F7';
+          ctx.strokeStyle = which === 1 ? '#FFD700' : (which === 2 ? '#4FC3F7' : '#CE93D8');
           ctx.lineWidth = 3;
           ctx.lineCap = 'round';
           ctx.arc(cx, cy, iconSize / 2 + 2, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
@@ -2183,7 +2224,9 @@
         ctx.textAlign = 'center';
         ctx.fillText('×' + count, cellX + cellW / 2, y + cellH - 4);
         const useBox = { x: cellX, y: y, w: cellW, h: cellH };
-        if (which === 1) shopHit.b1 = useBox; else shopHit.b2 = useBox;
+        if (which === 1) shopHit.b1 = useBox;
+        else if (which === 2) shopHit.b2 = useBox;
+        else shopHit.b3 = useBox;
         y += cellH + 4;
       }
 
@@ -2206,15 +2249,19 @@
         ctx.fillText('×' + price, bx + 24, y + buyH / 2);
         ctx.textBaseline = 'alphabetic';
         const buyBox = { x: bx, y: y, w: buyW, h: buyH };
-        if (which === 1) shopHit.buy1 = buyBox; else shopHit.buy2 = buyBox;
+        if (which === 1) shopHit.buy1 = buyBox;
+        else if (which === 2) shopHit.buy2 = buyBox;
+        else shopHit.buy3 = buyBox;
         y += buyH + gapY + 4;
       }
 
-      // Вертикально: бонус → цена → бонус → цена
+      // Вертикально: бонус → цена
       drawBonusCell(1, bonusImg, invBonus1);
       drawBuyCell(1, BONUS1_PRICE);
       drawBonusCell(2, bonus2Img, invBonus2);
       drawBuyCell(2, BONUS2_PRICE);
+      drawBonusCell(3, bonus3Img, invBonus3);
+      drawBuyCell(3, BONUS3_PRICE);
     }
 
     function drawCoin(c) {
@@ -2393,8 +2440,10 @@
           const hit = (box) => box && mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h;
           if (hit(shopHit.buy1)) { buyBonus(1); return; }
           if (hit(shopHit.buy2)) { buyBonus(2); return; }
+          if (hit(shopHit.buy3)) { buyBonus(3); return; }
           if (hit(shopHit.b1)) { useBonus1(); return; }
           if (hit(shopHit.b2)) { useBonus2(); return; }
+          if (hit(shopHit.b3)) { useBonus3(); return; }
         }
 
         // Кнопки на экране паузы
