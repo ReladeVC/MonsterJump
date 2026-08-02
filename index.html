@@ -275,10 +275,13 @@
     let waterBubbles = []; // пузырьки в водяном щите
 
     // Купленные бонусы (инвентарь)
-    const BONUS1_PRICE = 250;
+    const BONUS1_PRICE = 500;
     const BONUS2_PRICE = 500;
+    const ABILITY_COOLDOWN = 180; // 3 сек при 60 FPS
     let invBonus1 = 0; // bonus.png — полёт
     let invBonus2 = 0; // bonus2.png — водяная защита (1 падение)
+    let cdBonus1 = 0; // перезарядка полёта (после окончания эффекта)
+    let cdBonus2 = 0; // перезарядка защиты (сразу после использования)
 
     // Hitbox магазина бонусов (для кликов в игре)
     let shopHit = { b1: null, buy1: null, b2: null, buy2: null };
@@ -842,10 +845,10 @@
       return false;
     }
 
-    // bonus.png — полёт; только не во время падения (на платформе / вверх)
+    // bonus.png — полёт; только не во время падения; перезарядка после окончания
     function useBonus1() {
-      if (invBonus1 <= 0 || bonusActive || gameState !== 'playing' || isPaused) return false;
-      if (player.vy > 0 && !onPlatform) return false; // падает — нельзя
+      if (invBonus1 <= 0 || bonusActive || cdBonus1 > 0 || gameState !== 'playing' || isPaused) return false;
+      if (player.vy > 0 && !onPlatform) return false;
       invBonus1--;
       saveProgress();
       bonusActive = true;
@@ -854,13 +857,14 @@
       return true;
     }
 
-    // bonus2.png — водяная защита (как у 1 персонажа), только если эффекта ещё нет
+    // bonus2.png — защита; перезарядка сразу после использования
     function useBonus2() {
-      if (invBonus2 <= 0 || gameState !== 'playing' || isPaused) return false;
-      if (extraLifeReady) return false; // уже есть защита
+      if (invBonus2 <= 0 || cdBonus2 > 0 || gameState !== 'playing' || isPaused) return false;
+      if (extraLifeReady) return false;
       invBonus2--;
       saveProgress();
       extraLifeReady = true;
+      cdBonus2 = ABILITY_COOLDOWN;
       playBonusSound();
       return true;
     }
@@ -993,6 +997,8 @@
       if (gameState !== 'playing' || isPaused) return;
 
       onPlatform = false;
+      if (cdBonus1 > 0) cdBonus1--;
+      if (cdBonus2 > 0) cdBonus2--;
 
       // --- Бонус-эффект ---
       if (bonusActive) {
@@ -1001,6 +1007,7 @@
         spawnBonusParticles();
         if (bonusTimer <= 0) {
           bonusActive = false;
+          cdBonus1 = ABILITY_COOLDOWN; // перезарядка после окончания полёта
         }
       }
       updateParticles();
@@ -1269,6 +1276,8 @@
       extraLifeReady = hasExtraLife();
       invincibleTimer = 0;
       dyingTimer = 0;
+      cdBonus1 = 0;
+      cdBonus2 = 0;
       scoreEl.textContent = '0 m';
       scoreEl.style.display = 'none';
       runCoins = 0;
@@ -1303,21 +1312,29 @@
       const t2 = Math.max(0, Math.min(1, (score - 4500) / 1000));
       const t3 = Math.max(0, Math.min(1, (score - 14500) / 1000));
 
-      const parallax = 0.3;
+      const parallax = 0.25;
       const bgH = HEIGHT;
-      // Положительный модуль + целочисленный offset — без шва на Android
-      let scroll = -cameraY * parallax;
-      let offset = scroll - Math.floor(scroll / bgH) * bgH;
-      offset = Math.floor(offset);
+      // Целочисленный scroll; зеркальное повторение — меньше заметный шов
+      let scroll = Math.floor(-cameraY * parallax);
+      let offset = ((scroll % bgH) + bgH) % bgH;
 
       function drawBgLayer(img, alpha) {
         if (!isImageReady(img) || alpha <= 0.001) return;
         ctx.save();
         ctx.globalAlpha = alpha;
-        // Перекрытие 2px между тайлами, чтобы не было линии на стыке
+        // Рисуем с перекрытием и зеркалом через один ряд
         for (let i = -1; i <= 2; i++) {
-          const y = offset + i * bgH - 1;
-          ctx.drawImage(img, 0, y, WIDTH, bgH + 2);
+          const y = offset + i * bgH;
+          const flip = (Math.floor(scroll / bgH) + i) % 2 !== 0;
+          if (flip) {
+            ctx.save();
+            ctx.translate(0, y + bgH);
+            ctx.scale(1, -1);
+            ctx.drawImage(img, -1, -1, WIDTH + 2, bgH + 2);
+            ctx.restore();
+          } else {
+            ctx.drawImage(img, -1, y - 1, WIDTH + 2, bgH + 2);
+          }
         }
         ctx.restore();
       }
@@ -2114,14 +2131,46 @@
 
       function drawBonusCell(which, img, count) {
         const cellX = centerX(cellW);
+        const cd = which === 1 ? cdBonus1 : cdBonus2;
+        const busy = (which === 1 && bonusActive) || (which === 2 && extraLifeReady);
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         roundRect(cellX, y, cellW, cellH, 10);
         ctx.fill();
-        if (which === 2 && extraLifeReady) ctx.globalAlpha = 0.45;
+
+        const ix = cellX + (cellW - iconSize) / 2;
+        const iy = y + 3;
+        const cx = ix + iconSize / 2;
+        const cy = iy + iconSize / 2;
+
+        if (busy || cd > 0) ctx.globalAlpha = 0.4;
         if (isImageReady(img)) {
-          ctx.drawImage(img, cellX + (cellW - iconSize) / 2, y + 3, iconSize, iconSize);
+          ctx.drawImage(img, ix, iy, iconSize, iconSize);
         }
         ctx.globalAlpha = 1;
+
+        // Кольцо перезарядки вокруг умения
+        if (cd > 0) {
+          const progress = 1 - cd / ABILITY_COOLDOWN;
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+          ctx.lineWidth = 3;
+          ctx.arc(cx, cy, iconSize / 2 + 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = which === 1 ? '#FFD700' : '#4FC3F7';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.arc(cx, cy, iconSize / 2 + 2, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+          ctx.stroke();
+          // Секунды
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(Math.ceil(cd / 60)), cx, cy);
+          ctx.textBaseline = 'alphabetic';
+        }
+
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 11px Segoe UI';
         ctx.textAlign = 'center';
