@@ -925,34 +925,37 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     });
 
-    // Тач — повышенная чувствительность
-    function applyTouchSteer(clientX) {
-      const rect = canvas.getBoundingClientRect();
-      const mx = (clientX - rect.left) * (WIDTH / rect.width);
-      // Управление относительно центра персонажа
-      const dead = 8;
-      const px = player.x + player.width / 2;
-      if (mx < px - dead) { keys.left = true; keys.right = false; }
-      else if (mx > px + dead) { keys.right = true; keys.left = false; }
-      else { keys.left = false; keys.right = false; }
-    }
-
+    // Тач — свайп как раньше; от одного свайпа чуть дальше
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
       if (gameState !== 'playing' || isPaused) return;
       touchX = e.touches[0].clientX;
-      applyTouchSteer(touchX);
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      if (gameState !== 'playing' || isPaused) return;
-      touchX = e.touches[0].clientX;
-      applyTouchSteer(touchX);
+      if (gameState !== 'playing' || isPaused || touchX === null) return;
+      const currentX = e.touches[0].clientX;
+      const dx = currentX - touchX;
+      if (dx < -16) {
+        keys.left = true;
+        keys.right = false;
+        touchX = currentX;
+      } else if (dx > 16) {
+        keys.right = true;
+        keys.left = false;
+        touchX = currentX;
+      }
+      // Мелкий дрейф направление не сбрасывает — летит дальше
     }, { passive: false });
     canvas.addEventListener('touchend', () => {
-      keys.left = false;
-      keys.right = false;
       touchX = null;
+      // Короткая инерция после свайпа (~0.2 сек)
+      setTimeout(() => {
+        if (touchX === null) {
+          keys.left = false;
+          keys.right = false;
+        }
+      }, 200);
     });
 
     // Мышь (для удобства на ПК)
