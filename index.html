@@ -168,7 +168,7 @@
     // Более плавные прыжки — дольше в воздухе
     const GRAVITY = 0.26;
     const JUMP_FORCE = -11.2;
-    const MOVE_SPEED = 5.8;
+    const MOVE_SPEED = 6.4;
     const PLATFORM_WIDTH = 70;   // длина как раньше
     const PLATFORM_HEIGHT = 18;  // чуть толще для читаемости
     const PLAYER_WIDTH = 60;   // +50%
@@ -925,25 +925,29 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     });
 
-    // Тач (сниженная чувствительность)
+    // Тач — повышенная чувствительность
+    function applyTouchSteer(clientX) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (clientX - rect.left) * (WIDTH / rect.width);
+      // Управление относительно центра персонажа
+      const dead = 8;
+      const px = player.x + player.width / 2;
+      if (mx < px - dead) { keys.left = true; keys.right = false; }
+      else if (mx > px + dead) { keys.right = true; keys.left = false; }
+      else { keys.left = false; keys.right = false; }
+    }
+
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
-      if (gameState !== 'playing') return;
+      if (gameState !== 'playing' || isPaused) return;
       touchX = e.touches[0].clientX;
+      applyTouchSteer(touchX);
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      if (gameState !== 'playing' || touchX === null) return;
-      const currentX = e.touches[0].clientX;
-      const dx = currentX - touchX;
-      // Порог увеличен: нужно сдвинуть палец сильнее
-      if (dx < -22) { keys.left = true; keys.right = false; touchX = currentX; }
-      else if (dx > 22) { keys.right = true; keys.left = false; touchX = currentX; }
-      // Небольшой дрейф — сбрасываем направление
-      else if (Math.abs(dx) < 6) {
-        keys.left = false;
-        keys.right = false;
-      }
+      if (gameState !== 'playing' || isPaused) return;
+      touchX = e.touches[0].clientX;
+      applyTouchSteer(touchX);
     }, { passive: false });
     canvas.addEventListener('touchend', () => {
       keys.left = false;
