@@ -192,6 +192,9 @@
       player:          'assets/player.png',
       player2:         'assets/player2.png',
       player3:         'assets/player3.png',
+      player4:         'assets/player4.png',
+      player5:         'assets/player5.png',
+      player6:         'assets/player6.png',
       platform:        'assets/platform.png',
       platformBroken:  'assets/platform_broken.png',
       platformMoving:  'assets/platform_moving.png',
@@ -205,7 +208,7 @@
 
     let titleNameImg = null;
     let startBtnImg = null;
-    let playerImgs = [null, null, null]; // 3 персонажа
+    let playerImgs = [null, null, null, null, null, null];
     let platformImg = null;
     let brokenPlatformImg = null;
     let movingPlatformImg = null;
@@ -215,29 +218,64 @@
     let liderImg = null;
     let goldImg = null;
 
-    // Персонажи: 0 бесплатный, 1 = 2500 (x2 монеты), 2 = 7500 (магнит)
-    const CHAR_PRICES = [0, 2500, 7500];
+    // 0 — жизнь (кокон), 1 — ×2 монеты 2500, 2 — магнит 7500
+    // 3 — ×2 высота 100000, 4 — 15000m (−50% пад. ×2×2), 5 — 25000m (все силы)
+    const CHAR_INFO = [
+      { price: 0, unlock: 'free', label: 'Запасная жизнь' },
+      { price: 2500, unlock: 'coins', label: '×2 монеты' },
+      { price: 7500, unlock: 'coins', label: 'Магнит' },
+      { price: 100000, unlock: 'coins', label: '×2 высота' },
+      { price: 0, unlock: 'height', heightReq: 15000, label: 'Медл. ×2 монеты' },
+      { price: 0, unlock: 'height', heightReq: 25000, label: 'Все силы' }
+    ];
+    const CHAR_PRICES = CHAR_INFO.map(c => c.price);
     let selectedCharacter = 0;
     let currentPlayerImg = null;
 
-    // Секретный код: monstergold → +10000 монет
-    const SECRET_CODE = 'monstergold';
-    let secretBuffer = '';
-    let secretFlashTimer = 0; // подсветка при начислении
+    function hasCoinDouble() {
+      return selectedCharacter === 1 || selectedCharacter === 4 || selectedCharacter === 5;
+    }
+    function hasMagnet() {
+      return selectedCharacter === 2 || selectedCharacter === 5;
+    }
+    function hasHeightDouble() {
+      return selectedCharacter === 3 || selectedCharacter === 4 || selectedCharacter === 5;
+    }
+    function hasSlowFall() {
+      return selectedCharacter === 4 || selectedCharacter === 5;
+    }
+    function hasExtraLife() {
+      return selectedCharacter === 0 || selectedCharacter === 5;
+    }
 
-    // Тряска при нехватке монет: { 1: frames, 2: frames }
-    let charShake = { 1: 0, 2: 0 };
+    const SECRET_CODES = {
+      monstergold: 'coins',
+      monsterall: 'unlock'
+    };
+    let secretBuffer = '';
+    let secretFlashTimer = 0;
+    let secretFlashText = '+10000';
+    // Мобильный секрет: 25 нажатий на 1-го персонажа → открыть всех
+    let firstCharTapCount = 0;
+
+    let charShake = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let coinShake = 0;
 
-    // Прогресс из localStorage
+    let extraLifeReady = false;
+    let invincibleTimer = 0;
+    let dyingTimer = 0;
+
     let totalCoins = 0;
-    let unlockedChars = [true, false, false];
+    let unlockedChars = [true, false, false, false, false, false];
     try {
       totalCoins = parseInt(localStorage.getItem('monsterJumpCoins') || '0', 10) || 0;
       const u = localStorage.getItem('monsterJumpUnlocks');
       if (u) {
         const arr = JSON.parse(u);
-        if (Array.isArray(arr) && arr.length === 3) unlockedChars = arr.map(Boolean);
+        if (Array.isArray(arr)) {
+          for (let i = 0; i < 6; i++) unlockedChars[i] = !!arr[i];
+          unlockedChars[0] = true;
+        }
       }
     } catch (e) {}
 
@@ -247,6 +285,17 @@
         localStorage.setItem('monsterJumpUnlocks', JSON.stringify(unlockedChars));
         localStorage.setItem('monsterJumpBest', String(bestScore));
       } catch (e) {}
+    }
+
+    function isCharUnlocked(i) {
+      if (i === 0 || unlockedChars[i]) return true;
+      const info = CHAR_INFO[i];
+      if (info.unlock === 'height' && typeof bestScore === 'number' && bestScore >= info.heightReq) {
+        unlockedChars[i] = true;
+        saveProgress();
+        return true;
+      }
+      return false;
     }
 
     function triggerNoMoneyShake(charIndex) {
@@ -285,6 +334,9 @@
     playerImgs[0]     = loadImage(ASSETS.player);
     playerImgs[1]     = loadImage(ASSETS.player2);
     playerImgs[2]     = loadImage(ASSETS.player3);
+    playerImgs[3]     = loadImage(ASSETS.player4);
+    playerImgs[4]     = loadImage(ASSETS.player5);
+    playerImgs[5]     = loadImage(ASSETS.player6);
     platformImg       = loadImage(ASSETS.platform);
     brokenPlatformImg = loadImage(ASSETS.platformBroken);
     movingPlatformImg = loadImage(ASSETS.platformMoving);
@@ -677,8 +729,7 @@
     function collectCoin(c) {
       if (c.collected) return;
       c.collected = true;
-      // player2 (index 1) — x2 монеты
-      const amount = (selectedCharacter === 1) ? 2 : 1;
+      const amount = hasCoinDouble() ? 2 : 1;
       runCoins += amount;
       totalCoins += amount;
       saveProgress();
@@ -690,18 +741,26 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
       if (e.code === 'Space' && gameState === 'gameover') retryGame();
 
-      // Секретный код monstergold
+      // Секретные коды: monstergold / monsterall
       if (e.key && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
         secretBuffer += e.key.toLowerCase();
-        if (secretBuffer.length > SECRET_CODE.length) {
-          secretBuffer = secretBuffer.slice(-SECRET_CODE.length);
+        if (secretBuffer.length > 12) {
+          secretBuffer = secretBuffer.slice(-12);
         }
-        if (secretBuffer === SECRET_CODE) {
+        if (secretBuffer.endsWith('monstergold')) {
           totalCoins += 10000;
           saveProgress();
           secretBuffer = '';
           secretFlashTimer = 90;
-          coinShake = 18; // радостная тряска монет
+          secretFlashText = '+10000';
+          coinShake = 18;
+        } else if (secretBuffer.endsWith('monsterall')) {
+          for (let i = 0; i < 6; i++) unlockedChars[i] = true;
+          saveProgress();
+          secretBuffer = '';
+          secretFlashTimer = 90;
+          secretFlashText = 'ALL';
+          coinShake = 18;
         }
       }
     });
@@ -767,6 +826,18 @@
 
     // ---------- ФИЗИКА И ЛОГИКА ----------
     function update() {
+      if (gameState === 'dying') {
+        player.vy += GRAVITY * 1.2;
+        player.y += player.vy;
+        if (dyingTimer > 0) {
+          dyingTimer--;
+          if (dyingTimer <= 0) {
+            gameState = 'gameover';
+            gameOverEl.style.display = 'block';
+          }
+        }
+        return;
+      }
       if (gameState !== 'playing' || isPaused) return;
 
       // --- Бонус-эффект ---
@@ -799,11 +870,14 @@
       if (player.x + player.width < 0) player.x = WIDTH;
       if (player.x > WIDTH) player.x = -player.width;
 
-      // Гравитация (не применяется во время бонуса)
+      // Гравитация (не применяется во время бонуса; slow fall = −50%)
       if (!bonusActive) {
-        player.vy += GRAVITY;
+        const g = hasSlowFall() ? GRAVITY * 0.5 : GRAVITY;
+        player.vy += g;
       }
       player.y += player.vy;
+
+      if (invincibleTimer > 0) invincibleTimer--;
 
       // Камера следует за игроком вверх
       if (player.y < cameraY + HEIGHT * 0.4) {
@@ -860,7 +934,7 @@
       }
 
       // Монеты: магнит + сбор по визуальному размеру (с бонусом — увеличенный)
-      const magnetOn = selectedCharacter === 2;
+      const magnetOn = hasMagnet();
       const speedY = Math.abs(player.vy);
       const bodyScale = bonusActive ? BONUS_SCALE : 1;
       const bodyW = PLAYER_WIDTH * bodyScale;
@@ -943,15 +1017,16 @@
         }
       }
 
-      // Подсчёт высоты (метры)
-      const currentHeight = Math.max(0, Math.floor((-cameraY) / 10));
+      // Подсчёт высоты (метры), ×2 для player4/5/6
+      const heightMul = hasHeightDouble() ? 2 : 1;
+      const currentHeight = Math.max(0, Math.floor((-cameraY) / 10) * heightMul);
       if (currentHeight > maxHeight) {
         maxHeight = currentHeight;
         score = maxHeight;
         scoreEl.textContent = score + ' m';
         if (score > bestScore) {
           bestScore = score;
-          try { localStorage.setItem('monsterJumpBest', String(bestScore)); } catch (e) {}
+          saveProgress();
         }
       }
       // Убрать подсказку управления при движении вверх
@@ -970,10 +1045,33 @@
         !c.collected && (c.magnetized || c.y < cameraY + HEIGHT + 120)
       );
 
-      // Проверка проигрыша (во время бонуса не проигрываем)
-      if (!bonusActive && player.y > cameraY + HEIGHT + 50) {
-        gameOver();
+      // Проверка проигрыша (во время бонуса / неуязвимости / умирания — нет)
+      if (!bonusActive && invincibleTimer <= 0 && gameState === 'playing' &&
+          player.y > cameraY + HEIGHT + 50) {
+        if (extraLifeReady && hasExtraLife()) {
+          // Запасная жизнь: кокон срывается, взлёт ×2 от пружины
+          extraLifeReady = false;
+          player.vy = JUMP_FORCE * 1.7 * 2;
+          player.y = cameraY + HEIGHT * 0.55;
+          invincibleTimer = 180; // 3 сек моргания
+          playSpringSound();
+        } else {
+          startDeathAnimation();
+        }
       }
+    }
+
+    function startDeathAnimation() {
+      gameState = 'dying';
+      dyingTimer = 70;
+      player.vx = 0;
+      finalScoreEl.textContent = score + ' m';
+      if (score > bestScore) {
+        bestScore = score;
+        saveProgress();
+      }
+      hintEl.style.display = 'none';
+      scoreEl.style.display = 'none';
     }
 
     function gameOver() {
@@ -981,7 +1079,7 @@
       finalScoreEl.textContent = score + ' m';
       if (score > bestScore) {
         bestScore = score;
-        try { localStorage.setItem('monsterJumpBest', String(bestScore)); } catch (e) {}
+        saveProgress();
       }
       gameOverEl.style.display = 'block';
       hintEl.style.display = 'none';
@@ -989,11 +1087,9 @@
     }
 
     function startGame() {
-      // Разблокируем звук (браузеры требуют жест пользователя)
       getAudioCtx();
       startMusic();
 
-      // Устанавливаем выбранного персонажа
       currentPlayerImg = playerImgs[selectedCharacter];
 
       player.x = WIDTH / 2 - PLAYER_WIDTH / 2;
@@ -1009,8 +1105,11 @@
       bonusTimer = 0;
       particles = [];
       isPaused = false;
+      extraLifeReady = hasExtraLife();
+      invincibleTimer = 0;
+      dyingTimer = 0;
       scoreEl.textContent = '0 m';
-      scoreEl.style.display = 'none'; // рисуем счёт на canvas
+      scoreEl.style.display = 'none';
       runCoins = 0;
       gameState = 'playing';
       gameOverEl.style.display = 'none';
@@ -1244,88 +1343,73 @@
       const screenY = player.y - cameraY;
       const img = currentPlayerImg;
       const scale = bonusActive ? BONUS_SCALE : 1;
-
-      // Наклон при движении влево/вправо (эффект перемещения)
       const tilt = Math.max(-0.25, Math.min(0.25, player.vx * 0.04));
 
-      // Мягкая тень под персонажем (объём)
-      const shadowScale = scale;
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      // Моргание при неуязвимости после запасной жизни
+      if (invincibleTimer > 0 && Math.floor(invincibleTimer / 6) % 2 === 0) {
+        return;
+      }
+
+      // Анимация проигрыша — падение и исчезновение
+      let deathAlpha = 1;
+      let deathSpin = 0;
+      if (gameState === 'dying') {
+        deathAlpha = Math.max(0, dyingTimer / 70);
+        deathSpin = (70 - dyingTimer) * 0.12;
+        player.vy = Math.max(player.vy, 2);
+      }
+
+      const aspect = isImageReady(img) ? img.naturalWidth / img.naturalHeight : 0.8;
+      const drawH = PLAYER_HEIGHT * scale;
+      const drawW = drawH * aspect;
+      const drawX = player.x + (player.width - drawW) / 2;
+      const drawY = screenY + player.height - drawH;
+      const cx = drawX + drawW / 2;
+      const cy = drawY + drawH * 0.7;
+
+      // Прозрачный объём (еле заметный ореол)
+      ctx.save();
+      ctx.globalAlpha = 0.12 * deathAlpha;
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(
-        player.x + player.width / 2,
-        screenY + player.height + 3,
-        16 * shadowScale,
-        5 * Math.min(shadowScale, 1.5),
-        0, 0, Math.PI * 2
-      );
+      ctx.ellipse(cx, cy - drawH * 0.15, drawW * 0.55, drawH * 0.55, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
-      if (isImageReady(img)) {
-        // Сохраняем пропорции + учитываем бонус-скейл
-        const aspect = img.naturalWidth / img.naturalHeight;
-        const drawH = PLAYER_HEIGHT * scale;
-        const drawW = drawH * aspect;
-
-        // Ноги остаются на месте (растём вверх и в стороны)
-        const drawX = player.x + (player.width - drawW) / 2;
-        const drawY = screenY + player.height - drawH;
-
-        // Центр для поворота (ближе к ногам)
-        const cx = drawX + drawW / 2;
-        const cy = drawY + drawH * 0.7;
-
+      // Кокон только до использования жизни; после взлёта и моргания не рисуем
+      if (extraLifeReady && hasExtraLife() && invincibleTimer <= 0 && gameState === 'playing') {
         ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(tilt);
-
-        // Лёгкое свечение по контуру — отделяет от фона и даёт объём
-        ctx.shadowColor = 'rgba(0,0,0,0.25)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetY = 2;
-
-        ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
-
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      } else {
-        // Стандартный персонаж
-        ctx.save();
-        const offsetY = bonusActive ? -(PLAYER_HEIGHT * (scale - 1)) / 2 : 0;
-        ctx.translate(player.x + player.width / 2, screenY + player.height / 2 + offsetY);
-        ctx.rotate(tilt);
-        ctx.scale(scale, scale);
-
-        ctx.fillStyle = '#FFEB3B';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#333';
-        ctx.beginPath();
-        ctx.arc(6, -6, 4, 0, Math.PI * 2);
-        ctx.arc(14, -6, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(7, -7, 1.5, 0, Math.PI * 2);
-        ctx.arc(15, -7, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#333';
+        ctx.globalAlpha = 0.28 + Math.sin(Date.now() / 200) * 0.08;
+        ctx.strokeStyle = 'rgba(180, 230, 255, 0.7)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(10, 2, 6, 0.2, Math.PI - 0.2);
+        ctx.ellipse(cx, cy - drawH * 0.1, drawW * 0.65, drawH * 0.62, 0, 0, Math.PI * 2);
         ctx.stroke();
-
-        ctx.fillStyle = '#FBC02D';
-        ctx.fillRect(-12, 16, 8, 10);
-        ctx.fillRect(4, 16, 8, 10);
-
+        ctx.fillStyle = 'rgba(160, 220, 255, 0.1)';
+        ctx.fill();
         ctx.restore();
       }
+
+      ctx.save();
+      ctx.globalAlpha = deathAlpha;
+      ctx.translate(cx, cy);
+      ctx.rotate(tilt + deathSpin);
+
+      if (isImageReady(img)) {
+        // Еле заметный объёмный контур без тени под ногами
+        ctx.shadowColor = 'rgba(255,255,255,0.15)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetY = 0;
+        ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 18, 22, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     function drawBonus(b) {
@@ -1387,19 +1471,30 @@
     // ---------- ТИТУЛЬНЫЙ ЭКРАН ----------
     // Координаты элементов (для кликов)
     const titleLayout = {
-      charSize: 90,
-      charY: 280,
-      charGap: 22,
+      charSize: 72,
+      charY: 255,
+      charGap: 18,
+      rowGap: 110,
       startBtnW: 180,
       startBtnH: 70,
-      startBtnY: 520,
+      startBtnY: 560,
       _buyBtns: []
     };
 
     function getCharPositions() {
+      // 2 ряда по 3
       const totalW = 3 * titleLayout.charSize + 2 * titleLayout.charGap;
       const startX = (WIDTH - totalW) / 2;
-      return [0, 1, 2].map(i => startX + i * (titleLayout.charSize + titleLayout.charGap));
+      const positions = [];
+      for (let i = 0; i < 6; i++) {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        positions.push({
+          x: startX + col * (titleLayout.charSize + titleLayout.charGap),
+          y: titleLayout.charY + row * titleLayout.rowGap
+        });
+      }
+      return positions;
     }
 
     function drawTitleScreen() {
@@ -1444,8 +1539,7 @@
       // Тики тряски / вспышки
       if (coinShake > 0) coinShake--;
       if (secretFlashTimer > 0) secretFlashTimer--;
-      if (charShake[1] > 0) charShake[1]--;
-      if (charShake[2] > 0) charShake[2]--;
+      for (let k = 1; k <= 5; k++) if (charShake[k] > 0) charShake[k]--;
 
       // Баланс монет на титуле (тряска при нехватке / вспышка при коде)
       const coinOx = coinShake > 0 ? Math.sin(coinShake * 1.8) * 5 : 0;
@@ -1473,7 +1567,7 @@
       if (secretFlashTimer > 0) {
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 12px Segoe UI';
-        ctx.fillText('+10000', 44 + coinOx + 70, 28 + coinOy);
+        ctx.fillText(secretFlashText, 44 + coinOx + 70, 28 + coinOy);
       }
 
       // Подпись
@@ -1482,28 +1576,61 @@
       ctx.textAlign = 'center';
       ctx.fillText('Выбери персонажа', WIDTH / 2, 240);
 
-      // --- 3 персонажа ---
+      // --- 6 персонажей (2×3) ---
       const positions = getCharPositions();
-      const colors = ['#FFEB3B', '#4FC3F7', '#FF8A65'];
+      const colors = ['#FFEB3B', '#4FC3F7', '#FF8A65', '#CE93D8', '#80CBC4', '#FFD54F'];
       titleLayout._buyBtns = [];
 
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 6; i++) {
         const shakeT = charShake[i] || 0;
-        const sx = shakeT > 0 ? Math.sin(shakeT * 2.5) * 6 : 0;
-        const sy = shakeT > 0 ? Math.cos(shakeT * 3.1) * 4 : 0;
-        const x = positions[i] + sx;
-        const y = titleLayout.charY + sy;
+        const sx = shakeT > 0 ? Math.sin(shakeT * 2.5) * 5 : 0;
+        const sy = shakeT > 0 ? Math.cos(shakeT * 3.1) * 3 : 0;
+        const baseX = positions[i].x;
+        const baseY = positions[i].y;
+        const x = baseX + sx;
+        const y = baseY + sy;
         const size = titleLayout.charSize;
-        const unlocked = unlockedChars[i];
+        const unlocked = isCharUnlocked(i);
         const isSelected = selectedCharacter === i && unlocked;
+        const info = CHAR_INFO[i];
+        const pad = 8;
+        const cardX = x - pad;
+        const cardY = y - pad;
+        const cardW = size + pad * 2;
+        const cardH = size + pad * 2;
+        const radius = 16;
 
+        // Прозрачно-серая подложка со скруглёнными краями
+        ctx.fillStyle = 'rgba(60, 65, 80, 0.45)';
+        roundRect(cardX, cardY, cardW, cardH, radius);
+        ctx.fill();
+        // Тонкая внутренняя обводка карточки
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1.5;
+        roundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, radius - 1);
+        ctx.stroke();
+
+        // Красивая рамка выбора
         if (isSelected) {
-          ctx.strokeStyle = '#4ecdc4';
-          ctx.lineWidth = 4;
-          roundRect(x - 8, y - 8, size + 16, size + 16, 12);
+          // Мягкое свечение
+          ctx.save();
+          ctx.shadowColor = 'rgba(78, 205, 196, 0.55)';
+          ctx.shadowBlur = 14;
+          ctx.strokeStyle = 'rgba(78, 205, 196, 0.9)';
+          ctx.lineWidth = 3;
+          roundRect(cardX - 3, cardY - 3, cardW + 6, cardH + 6, radius + 4);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(78, 205, 196, 0.15)';
-          roundRect(x - 8, y - 8, size + 16, size + 16, 12);
+          ctx.restore();
+
+          // Внешнее кольцо
+          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+          ctx.lineWidth = 1.5;
+          roundRect(cardX - 5, cardY - 5, cardW + 10, cardH + 10, radius + 6);
+          ctx.stroke();
+
+          // Лёгкая заливка выбора
+          ctx.fillStyle = 'rgba(78, 205, 196, 0.12)';
+          roundRect(cardX, cardY, cardW, cardH, radius);
           ctx.fill();
         }
 
@@ -1512,13 +1639,8 @@
           const aspect = img.naturalWidth / img.naturalHeight;
           let dw = size;
           let dh = size / aspect;
-          if (dh > size) {
-            dh = size;
-            dw = size * aspect;
-          }
-          const dx = x + (size - dw) / 2;
-          const dy = y + (size - dh) / 2;
-          ctx.drawImage(img, dx, dy, dw, dh);
+          if (dh > size) { dh = size; dw = size * aspect; }
+          ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
         } else {
           ctx.fillStyle = colors[i];
           ctx.beginPath();
@@ -1527,45 +1649,67 @@
         }
 
         if (!unlocked) {
-          ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.55)' : 'rgba(0,0,0,0.55)';
-          roundRect(x - 4, y - 4, size + 8, size + 8, 10);
+          ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.5)' : 'rgba(0,0,0,0.5)';
+          roundRect(cardX, cardY, cardW, cardH, radius);
           ctx.fill();
 
-          // Замок (трясётся вместе с персонажем)
-          const lockShake = shakeT > 0 ? Math.sin(shakeT * 4) * 3 : 0;
           ctx.fillStyle = shakeT > 0 ? '#ff8a80' : 'rgba(255,255,255,0.85)';
-          ctx.font = '28px Segoe UI';
+          ctx.font = '22px Segoe UI';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('🔒', x + size / 2 + lockShake, y + size / 2 - 4);
+          ctx.fillText('🔒', x + size / 2, y + size / 2 - 2);
           ctx.textBaseline = 'alphabetic';
 
-          const buyW = size + 8;
-          const buyH = 28;
-          const buyX = positions[i] - 4; // hitbox без тряски
-          const buyY = titleLayout.charY + size + 10;
-          const canAfford = totalCoins >= CHAR_PRICES[i];
+          const buyW = size + 6;
+          const buyH = 24;
+          const buyX = baseX - 3;
+          const buyY = baseY + size + 6;
 
-          ctx.fillStyle = canAfford ? 'rgba(78, 205, 196, 0.95)' : 'rgba(80,80,90,0.9)';
-          roundRect(buyX + sx, buyY + sy, buyW, buyH, 10);
-          ctx.fill();
-
-          if (isImageReady(goldImg)) {
-            ctx.drawImage(goldImg, buyX + 6 + sx, buyY + 4 + sy, 20, 20);
+          if (info.unlock === 'coins') {
+            const canAfford = totalCoins >= info.price;
+            ctx.fillStyle = canAfford ? 'rgba(78, 205, 196, 0.95)' : 'rgba(80,80,90,0.9)';
+            roundRect(buyX + sx, buyY + sy, buyW, buyH, 8);
+            ctx.fill();
+            if (isImageReady(goldImg)) {
+              ctx.drawImage(goldImg, buyX + 4 + sx, buyY + 2 + sy, 18, 18);
+            }
+            ctx.fillStyle = canAfford ? '#1a1a2e' : '#bbb';
+            ctx.font = 'bold 11px Segoe UI';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const priceStr = info.price >= 1000 ? (info.price / 1000) + 'k' : String(info.price);
+            ctx.fillText(priceStr, buyX + 24 + sx, buyY + buyH / 2 + sy);
+            ctx.textBaseline = 'alphabetic';
+            titleLayout._buyBtns.push({ i, x: buyX, y: buyY, w: buyW, h: buyH });
+          } else if (info.unlock === 'height') {
+            // Условие по рекорду — иконка Lider + метры
+            ctx.fillStyle = 'rgba(80,80,90,0.9)';
+            roundRect(buyX + sx, buyY + sy, buyW, buyH, 8);
+            ctx.fill();
+            if (isImageReady(liderImg)) {
+              ctx.drawImage(liderImg, buyX + 4 + sx, buyY + 2 + sy, 18, 18);
+            }
+            ctx.fillStyle = '#bbb';
+            ctx.font = 'bold 10px Segoe UI';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText((info.heightReq / 1000) + 'k m', buyX + 24 + sx, buyY + buyH / 2 + sy);
+            ctx.textBaseline = 'alphabetic';
           }
-          ctx.fillStyle = canAfford ? '#1a1a2e' : (shakeT > 0 ? '#ff8a80' : '#bbb');
-          ctx.font = 'bold 13px Segoe UI';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(CHAR_PRICES[i]), buyX + 28 + sx, buyY + buyH / 2 + sy);
-          ctx.textBaseline = 'alphabetic';
-
-          titleLayout._buyBtns.push({ i, x: buyX, y: buyY, w: buyW, h: buyH });
-        } else if (i > 0) {
-          ctx.fillStyle = 'rgba(255,255,255,0.55)';
-          ctx.font = '11px Segoe UI';
+        } else {
+          // Описание способности — белые буквы
+          const labelY = y + size + 22;
+          ctx.font = 'bold 11px Segoe UI, Arial';
+          const tw = ctx.measureText(info.label).width + 12;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          roundRect(x + size / 2 - tw / 2, labelY - 9, tw, 18, 8);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px Segoe UI, Arial';
           ctx.textAlign = 'center';
-          ctx.fillText(i === 1 ? '×2 монеты' : 'магнит', x + size / 2, y + size + 18);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(info.label, x + size / 2, labelY);
+          ctx.textBaseline = 'alphabetic';
         }
       }
 
@@ -1848,19 +1992,18 @@
         }
       }
 
-      // Кнопка купить
+      // Кнопка купить (только coin-unlock)
       if (titleLayout._buyBtns) {
         for (const b of titleLayout._buyBtns) {
           if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
-            const price = CHAR_PRICES[b.i];
-            if (!unlockedChars[b.i]) {
-              if (totalCoins >= price) {
-                totalCoins -= price;
+            const info = CHAR_INFO[b.i];
+            if (!isCharUnlocked(b.i) && info.unlock === 'coins') {
+              if (totalCoins >= info.price) {
+                totalCoins -= info.price;
                 unlockedChars[b.i] = true;
                 selectedCharacter = b.i;
                 saveProgress();
               } else {
-                // Не хватает монет — тряска персонажа, замка и монет
                 triggerNoMoneyShake(b.i);
               }
             }
@@ -1871,12 +2014,27 @@
 
       // Клик по персонажам (только открытых)
       const positions = getCharPositions();
-      for (let i = 0; i < 3; i++) {
-        const x = positions[i];
-        const y = titleLayout.charY;
+      for (let i = 0; i < 6; i++) {
+        const x = positions[i].x;
+        const y = positions[i].y;
         const size = titleLayout.charSize;
         if (mx >= x - 8 && mx <= x + size + 8 && my >= y - 8 && my <= y + size + 8) {
-          if (unlockedChars[i]) selectedCharacter = i;
+          // 25 нажатий на 1-го персонажа — открыть всех (для мобильных)
+          if (i === 0) {
+            firstCharTapCount++;
+            if (firstCharTapCount >= 25) {
+              for (let j = 0; j < 6; j++) unlockedChars[j] = true;
+              saveProgress();
+              firstCharTapCount = 0;
+              secretFlashTimer = 90;
+              secretFlashText = 'ALL';
+              coinShake = 18;
+            }
+          } else {
+            firstCharTapCount = 0;
+          }
+          if (isCharUnlocked(i)) selectedCharacter = i;
+          else if (CHAR_INFO[i].unlock === 'coins') triggerNoMoneyShake(i);
           return;
         }
       }
@@ -1952,7 +2110,7 @@
 
     // ---------- ГЛАВНЫЙ ЦИКЛ ----------
     function loop() {
-      if (gameState === 'playing') {
+      if (gameState === 'playing' || gameState === 'dying') {
         update();
       }
       draw();
