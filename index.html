@@ -303,27 +303,50 @@
       coinShake = 24;
     }
 
+    let assetsLoaded = 0;
+    let assetsTotal = 0;
+    let assetsReady = false;
+
     function loadImage(src) {
       const img = new Image();
-      // Важно для GitHub Pages: путь чувствителен к регистру
-      img.src = src;
+      assetsTotal++;
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        assetsLoaded++;
+      };
+      img.onload = done;
       img.onerror = () => {
         console.warn('Не удалось загрузить:', src);
+        done();
       };
+      img.src = src;
+      if (img.complete) done();
       return img;
     }
 
-    // Пробуем несколько вариантов имени файла (для GitHub, где регистр важен)
+    // Несколько вариантов имени (регистр на GitHub)
     function loadImageWithFallback(paths) {
       const img = new Image();
+      assetsTotal++;
+      let settled = false;
       let index = 0;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        assetsLoaded++;
+      };
       function tryNext() {
         if (index >= paths.length) {
-          console.warn('Бонус не найден. Проверь имя файла: assets/bonus.png');
+          console.warn('Не найден файл:', paths[0]);
+          done();
           return;
         }
         img.src = paths[index++];
+        if (img.complete && img.naturalWidth > 0) done();
       }
+      img.onload = done;
       img.onerror = tryNext;
       tryNext();
       return img;
@@ -341,33 +364,29 @@
     brokenPlatformImg = loadImage(ASSETS.platformBroken);
     movingPlatformImg = loadImage(ASSETS.platformMoving);
     springImg         = loadImage(ASSETS.spring);
-    // Бонус: пробуем разные варианты имени (частая проблема на GitHub)
     bonusImg          = loadImageWithFallback([
-      'assets/bonus.png',
-      'assets/Bonus.png',
-      'assets/BONUS.png',
-      'assets/bonus.PNG',
-      'assets/bonus.jpg',
-      'assets/Bonus.jpg'
+      'assets/bonus.png', 'assets/Bonus.png', 'assets/BONUS.png'
     ]);
     bgImg             = loadImage(ASSETS.background);
     liderImg          = loadImageWithFallback([
-      'assets/Lider.png',
-      'assets/lider.png',
-      'assets/LIDER.png',
-      'assets/Leader.png',
-      'assets/leader.png'
+      'assets/Lider.png', 'assets/lider.png', 'assets/LIDER.png'
     ]);
     goldImg           = loadImageWithFallback([
-      'assets/gold.png',
-      'assets/Gold.png',
-      'assets/GOLD.png',
-      'assets/coin.png',
-      'assets/Coin.png'
+      'assets/gold.png', 'assets/Gold.png', 'assets/GOLD.png'
     ]);
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
+    }
+
+    function checkAssetsReady() {
+      if (assetsReady) return true;
+      if (assetsTotal > 0 && assetsLoaded >= assetsTotal) {
+        assetsReady = true;
+        if (gameState === 'loading') gameState = 'title';
+        return true;
+      }
+      return false;
     }
 
     // ---------- СОСТОЯНИЕ ИГРЫ ----------
@@ -393,16 +412,16 @@
       bestScore = parseInt(localStorage.getItem('monsterJumpBest') || '0', 10) || 0;
     } catch (e) { bestScore = 0; }
 
-    let gameState = 'title'; // 'title' | 'playing' | 'gameover'
+    let gameState = 'loading'; // 'loading' | 'title' | 'playing' | 'gameover' | 'dying'
     let keys = { left: false, right: false };
     let touchX = null;
 
     // Бонус-эффект
     let bonusActive = false;
     let bonusTimer = 0;        // оставшееся время в кадрах (~60fps * 5 = 300)
-    const BONUS_DURATION = 300; // 5 секунд
+    const BONUS_DURATION = 450; // 5 сек при 90 FPS
     const BONUS_SCALE = 2;
-    const BONUS_FLY_FORCE = -11; // постоянная сила вверх во время бонуса
+    const BONUS_FLY_FORCE = -11 * (60 / 90); // постоянная сила вверх во время бонуса
 
     // Частицы (звёздочки) при бонусе
     let particles = [];
@@ -466,6 +485,7 @@
     // Координаты UI-кнопок (нужны и для кликов, и для отрисовки)
     const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
     const musicBtn = { x: WIDTH - 96, y: 16, size: 36 };
+    const pauseMenuBtns = { continue: null, menu: null };
 
     function isHudClick(mx, my) {
       const buttons = [pauseBtn, musicBtn];
@@ -870,9 +890,13 @@
       if (player.x + player.width < 0) player.x = WIDTH;
       if (player.x > WIDTH) player.x = -player.width;
 
-      // Гравитация (не применяется во время бонуса; slow fall = −50%)
+      // Гравитация (не во время бонуса)
+      // Slow fall (−50%) только при падении — высота прыжка как у всех
       if (!bonusActive) {
-        const g = hasSlowFall() ? GRAVITY * 0.5 : GRAVITY;
+        let g = GRAVITY;
+        if (hasSlowFall() && player.vy > 0) {
+          g = GRAVITY * 0.5;
+        }
         player.vy += g;
       }
       player.y += player.vy;
@@ -989,10 +1013,13 @@
         }
       }
 
-      // Коллизии с платформами (только когда падаем и бонус НЕ активен)
+      // Коллизии с платформами (только видимые на экране)
       if (player.vy > 0 && !bonusActive) {
         for (let p of platforms) {
           if (p.broken) continue;
+          // Не прыгаем по платформам, которых уже не видно
+          const screenY = p.y - cameraY;
+          if (screenY < -20 || screenY > HEIGHT + 10) continue;
 
           if (player.x + player.width > p.x + 8 &&
               player.x < p.x + p.width - 8 &&
@@ -1205,28 +1232,14 @@
       else if (p.type === 'moving') baseImg = movingPlatformImg;
       else baseImg = platformImg;
 
+      // Только PNG, без стандартных заглушек
       if (isImageReady(baseImg)) {
         ctx.drawImage(baseImg, p.x, screenY, p.width, p.height);
-      } else {
-        ctx.fillStyle = {
-          'normal': '#4CAF50',
-          'moving': '#2196F3',
-          'breaking': '#FF9800',
-          'spring': '#4CAF50'
-        }[p.type] || '#4CAF50';
-
-        roundRect(p.x, screenY, p.width, p.height, 8);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        roundRect(p.x + 5, screenY + 3, p.width - 10, 5, 3);
-        ctx.fill();
       }
 
-      // Анимация движущейся платформы — блик и стрелки направления
-      if (p.type === 'moving' && !p.broken) {
+      // Анимация движущейся платформы — блик и стрелки
+      if (p.type === 'moving' && !p.broken && isImageReady(baseImg)) {
         const t = p.phase || 0;
-        // Бегущий блик
         const shineX = p.x + ((Math.sin(t * 1.5) * 0.5 + 0.5) * (p.width - 20));
         const grad = ctx.createLinearGradient(shineX, screenY, shineX + 20, screenY);
         grad.addColorStop(0, 'rgba(255,255,255,0)');
@@ -1235,7 +1248,6 @@
         ctx.fillStyle = grad;
         ctx.fillRect(p.x + 4, screenY + 2, p.width - 8, p.height - 4);
 
-        // Стрелка направления
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         const ax = p.dir > 0 ? p.x + p.width - 14 : p.x + 14;
         const ay = screenY + p.height / 2;
@@ -1253,26 +1265,14 @@
         ctx.fill();
       }
 
-      // --- Рисуем пружину сверху (если это spring) ---
-      if (p.type === 'spring') {
-        if (isImageReady(springImg)) {
-          // Рисуем пружину с сохранением пропорций
-          // Размер пружины: ширина ~40% от платформы, высота пропорционально
-          const springW = Math.min(42, p.width * 0.55);
-          const aspect = springImg.naturalHeight / springImg.naturalWidth;
-          const springH = springW * aspect;
-
-          const springX = p.x + (p.width - springW) / 2;
-          const springY = screenY - springH + 4; // чуть заходит на платформу
-
-          ctx.drawImage(springImg, springX, springY, springW, springH);
-        } else {
-          // Стандартная пружина (если spring.png нет)
-          ctx.fillStyle = '#C2185B';
-          ctx.fillRect(p.x + p.width / 2 - 8, screenY - 14, 16, 14);
-          ctx.fillStyle = '#F48FB1';
-          ctx.fillRect(p.x + p.width / 2 - 6, screenY - 11, 12, 10);
-        }
+      // Пружина — только spring.png
+      if (p.type === 'spring' && isImageReady(springImg)) {
+        const springW = Math.min(42, p.width * 0.55);
+        const aspect = springImg.naturalHeight / springImg.naturalWidth;
+        const springH = springW * aspect;
+        const springX = p.x + (p.width - springW) / 2;
+        const springY = screenY - springH + 4;
+        ctx.drawImage(springImg, springX, springY, springW, springH);
       }
     }
 
@@ -1367,15 +1367,6 @@
       const cx = drawX + drawW / 2;
       const cy = drawY + drawH * 0.7;
 
-      // Прозрачный объём (еле заметный ореол)
-      ctx.save();
-      ctx.globalAlpha = 0.12 * deathAlpha;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - drawH * 0.15, drawW * 0.55, drawH * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
       // Кокон только до использования жизни; после взлёта и моргания не рисуем
       if (extraLifeReady && hasExtraLife() && invincibleTimer <= 0 && gameState === 'playing') {
         ctx.save();
@@ -1396,18 +1387,11 @@
       ctx.rotate(tilt + deathSpin);
 
       if (isImageReady(img)) {
-        // Еле заметный объёмный контур без тени под ногами
         ctx.shadowColor = 'rgba(255,255,255,0.15)';
         ctx.shadowBlur = 6;
         ctx.shadowOffsetY = 0;
         ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
         ctx.shadowBlur = 0;
-      } else {
-        ctx.scale(scale, scale);
-        ctx.fillStyle = '#FFEB3B';
-        ctx.beginPath();
-        ctx.ellipse(0, -5, 18, 22, 0, 0, Math.PI * 2);
-        ctx.fill();
       }
       ctx.restore();
     }
@@ -1445,16 +1429,6 @@
         ctx.drawImage(bonusImg, x, y, w, h);
         ctx.shadowBlur = 0;
         ctx.restore();
-      } else {
-        // Fallback если картинка не загрузилась
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#FFA000';
-        ctx.beginPath();
-        ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 10, 0, Math.PI * 2);
-        ctx.fill();
       }
     }
 
@@ -1641,11 +1615,6 @@
           let dh = size / aspect;
           if (dh > size) { dh = size; dw = size * aspect; }
           ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
-        } else {
-          ctx.fillStyle = colors[i];
-          ctx.beginPath();
-          ctx.arc(x + size / 2, y + size / 2, size / 2 - 4, 0, Math.PI * 2);
-          ctx.fill();
         }
 
         if (!unlocked) {
@@ -1753,8 +1722,43 @@
       drawHUDButtons();
     }
 
+    function drawLoadingScreen() {
+      checkAssetsReady();
+      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      grad.addColorStop(0, '#1a1a2e');
+      grad.addColorStop(1, '#0f3460');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      const progress = assetsTotal > 0 ? assetsLoaded / assetsTotal : 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 22px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Загрузка...', WIDTH / 2, HEIGHT / 2 - 30);
+
+      const barW = 220;
+      const barH = 12;
+      const barX = (WIDTH - barW) / 2;
+      const barY = HEIGHT / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRect(barX, barY, barW, barH, 6);
+      ctx.fill();
+      ctx.fillStyle = '#4ecdc4';
+      roundRect(barX, barY, barW * progress, barH, 6);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '14px Segoe UI, Arial';
+      ctx.fillText(Math.floor(progress * 100) + '%', WIDTH / 2, barY + 32);
+    }
+
     function draw() {
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      if (gameState === 'loading') {
+        drawLoadingScreen();
+        return;
+      }
 
       if (gameState === 'title') {
         drawTitleScreen();
@@ -1808,15 +1812,52 @@
 
       // Оверлей паузы
       if (isPaused) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Панель
+        const panelW = 260;
+        const panelH = 200;
+        const panelX = (WIDTH - panelW) / 2;
+        const panelY = (HEIGHT - panelH) / 2 - 20;
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        roundRect(panelX, panelY, panelW, panelH, 20);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1.5;
+        roundRect(panelX, panelY, panelW, panelH, 20);
+        ctx.stroke();
+
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 36px Segoe UI, Arial';
+        ctx.font = 'bold 32px Segoe UI, Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('ПАУЗА', WIDTH / 2, HEIGHT / 2 - 10);
-        ctx.font = '16px Segoe UI, Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
-        ctx.fillText('Нажми кнопку паузы чтобы продолжить', WIDTH / 2, HEIGHT / 2 + 30);
+        ctx.fillText('ПАУЗА', WIDTH / 2, panelY + 48);
+
+        // Кнопка «Продолжить»
+        const btnW = 200;
+        const btnH = 44;
+        const contX = (WIDTH - btnW) / 2;
+        const contY = panelY + 80;
+        ctx.fillStyle = '#4ecdc4';
+        roundRect(contX, contY, btnW, btnH, 22);
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = 'bold 18px Segoe UI, Arial';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Продолжить', WIDTH / 2, contY + btnH / 2);
+
+        // Кнопка «Меню»
+        const menuY = contY + btnH + 14;
+        ctx.fillStyle = 'rgba(92, 107, 192, 0.95)';
+        roundRect(contX, menuY, btnW, btnH, 22);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Меню', WIDTH / 2, menuY + btnH / 2);
+        ctx.textBaseline = 'alphabetic';
+
+        // Hitbox для кликов
+        pauseMenuBtns.continue = { x: contX, y: contY, w: btnW, h: btnH };
+        pauseMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
       }
 
       // Виньетка
@@ -1894,15 +1935,6 @@
         ctx.shadowBlur = 8;
         ctx.drawImage(goldImg, x, y, size, size);
         ctx.restore();
-      } else {
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(x + size / 2, y + size / 2, size / 2 - 1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#FFA000';
-        ctx.beginPath();
-        ctx.arc(x + size / 2, y + size / 2, size / 4, 0, Math.PI * 2);
-        ctx.fill();
       }
     }
 
@@ -2059,6 +2091,24 @@
       const my = (clientY - rect.top) * scaleY;
 
       if (gameState === 'playing') {
+        // Кнопки на экране паузы
+        if (isPaused) {
+          const c = pauseMenuBtns.continue;
+          const m = pauseMenuBtns.menu;
+          if (c && mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) {
+            isPaused = false;
+            keys.left = false;
+            keys.right = false;
+            return;
+          }
+          if (m && mx >= m.x && mx <= m.x + m.w && my >= m.y && my <= m.y + m.h) {
+            isPaused = false;
+            goToMenu();
+            return;
+          }
+          return; // клик по оверлею — ничего
+        }
+
         // Кнопка паузы
         {
           const { x, y, size } = pauseBtn;
@@ -2108,17 +2158,34 @@
       }
     });
 
-    // ---------- ГЛАВНЫЙ ЦИКЛ ----------
-    function loop() {
-      if (gameState === 'playing' || gameState === 'dying') {
-        update();
+    // ---------- ГЛАВНЫЙ ЦИКЛ (фиксированный шаг 90 FPS) ----------
+    // Одинаковая скорость на любом экране (60/90/120 Гц)
+    const TARGET_FPS = 90;
+    const FIXED_DT = 1000 / TARGET_FPS;
+    let lastFrameTime = 0;
+    let accumulator = 0;
+
+    function loop(now) {
+      if (!lastFrameTime) lastFrameTime = now;
+      let frameTime = now - lastFrameTime;
+      lastFrameTime = now;
+      // Защита от долгих пауз / переключений вкладки
+      if (frameTime > 45) frameTime = 45;
+      accumulator += frameTime;
+
+      while (accumulator >= FIXED_DT) {
+        if (gameState === 'playing' || gameState === 'dying') {
+          update();
+        }
+        accumulator -= FIXED_DT;
       }
+
       draw();
       requestAnimationFrame(loop);
     }
 
     // Старт с титульного экрана
-    loop();
+    requestAnimationFrame(loop);
   </script>
 </body>
 </html>
