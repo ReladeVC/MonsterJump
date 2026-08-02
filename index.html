@@ -1305,16 +1305,21 @@
 
       const parallax = 0.3;
       const bgH = HEIGHT;
-      let offset = (-cameraY * parallax) % bgH;
-      if (offset > 0) offset -= bgH;
+      // Положительный модуль + целочисленный offset — без шва на Android
+      let scroll = -cameraY * parallax;
+      let offset = scroll - Math.floor(scroll / bgH) * bgH;
+      offset = Math.floor(offset);
 
       function drawBgLayer(img, alpha) {
         if (!isImageReady(img) || alpha <= 0.001) return;
+        ctx.save();
         ctx.globalAlpha = alpha;
+        // Перекрытие 2px между тайлами, чтобы не было линии на стыке
         for (let i = -1; i <= 2; i++) {
-          ctx.drawImage(img, 0, offset + i * bgH, WIDTH, bgH);
+          const y = offset + i * bgH - 1;
+          ctx.drawImage(img, 0, y, WIDTH, bgH + 2);
         }
-        ctx.globalAlpha = 1;
+        ctx.restore();
       }
 
       // alpha1 + alpha2 + alpha3 ≈ 1
