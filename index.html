@@ -165,9 +165,10 @@
     // ---------- НАСТРОЙКИ ----------
     const WIDTH = 400;
     const HEIGHT = 700;
-    const GRAVITY = 0.35;
-    const JUMP_FORCE = -13.5;
-    const MOVE_SPEED = 6.2;
+    // Более плавные прыжки — дольше в воздухе
+    const GRAVITY = 0.26;
+    const JUMP_FORCE = -11.2;
+    const MOVE_SPEED = 5.8;
     const PLATFORM_WIDTH = 70;   // длина как раньше
     const PLATFORM_HEIGHT = 18;  // чуть толще для читаемости
     const PLAYER_WIDTH = 60;   // +50%
@@ -201,9 +202,12 @@
       spring:          'assets/spring.png',
       bonus:           'assets/bonus.png',
       background:      'assets/background.png',
+      background2:     'assets/background2.png',
+      background3:     'assets/background3.png',
       music:           'assets/music.mp3',
       lider:           'assets/Lider.png',
-      gold:            'assets/gold.png'
+      gold:            'assets/gold.png',
+      bonus2:          'assets/bonus2.png'
     };
 
     let titleNameImg = null;
@@ -214,7 +218,10 @@
     let movingPlatformImg = null;
     let springImg = null;
     let bonusImg = null;
+    let bonus2Img = null;
     let bgImg = null;
+    let bg2Img = null;
+    let bg3Img = null;
     let liderImg = null;
     let goldImg = null;
 
@@ -264,11 +271,24 @@
     let extraLifeReady = false;
     let invincibleTimer = 0;
     let dyingTimer = 0;
+    let onPlatform = false;
+    let waterBubbles = []; // пузырьки в водяном щите
+
+    // Купленные бонусы (инвентарь)
+    const BONUS1_PRICE = 250;
+    const BONUS2_PRICE = 500;
+    let invBonus1 = 0; // bonus.png — полёт
+    let invBonus2 = 0; // bonus2.png — водяная защита (1 падение)
+
+    // Hitbox магазина бонусов (для кликов в игре)
+    let shopHit = { b1: null, buy1: null, b2: null, buy2: null };
 
     let totalCoins = 0;
     let unlockedChars = [true, false, false, false, false, false];
     try {
       totalCoins = parseInt(localStorage.getItem('monsterJumpCoins') || '0', 10) || 0;
+      invBonus1 = parseInt(localStorage.getItem('monsterJumpBonus1') || '0', 10) || 0;
+      invBonus2 = parseInt(localStorage.getItem('monsterJumpBonus2') || '0', 10) || 0;
       const u = localStorage.getItem('monsterJumpUnlocks');
       if (u) {
         const arr = JSON.parse(u);
@@ -284,6 +304,8 @@
         localStorage.setItem('monsterJumpCoins', String(totalCoins));
         localStorage.setItem('monsterJumpUnlocks', JSON.stringify(unlockedChars));
         localStorage.setItem('monsterJumpBest', String(bestScore));
+        localStorage.setItem('monsterJumpBonus1', String(invBonus1));
+        localStorage.setItem('monsterJumpBonus2', String(invBonus2));
       } catch (e) {}
     }
 
@@ -367,7 +389,16 @@
     bonusImg          = loadImageWithFallback([
       'assets/bonus.png', 'assets/Bonus.png', 'assets/BONUS.png'
     ]);
+    bonus2Img         = loadImageWithFallback([
+      'assets/bonus2.png', 'assets/Bonus2.png', 'assets/BONUS2.png'
+    ]);
     bgImg             = loadImage(ASSETS.background);
+    bg2Img            = loadImageWithFallback([
+      'assets/background2.png', 'assets/Background2.png', 'assets/BACKGROUND2.png'
+    ]);
+    bg3Img            = loadImageWithFallback([
+      'assets/background3.png', 'assets/Background3.png', 'assets/BACKGROUND3.png'
+    ]);
     liderImg          = loadImageWithFallback([
       'assets/Lider.png', 'assets/lider.png', 'assets/LIDER.png'
     ]);
@@ -421,7 +452,7 @@
     let bonusTimer = 0;        // оставшееся время в кадрах (~60fps * 5 = 300)
     const BONUS_DURATION = 450; // 5 сек при 90 FPS
     const BONUS_SCALE = 2;
-    const BONUS_FLY_FORCE = -11 * (60 / 90); // постоянная сила вверх во время бонуса
+    const BONUS_FLY_FORCE = -9.5; // полёт во время бонуса
 
     // Частицы (звёздочки) при бонусе
     let particles = [];
@@ -491,6 +522,13 @@
       const buttons = [pauseBtn, musicBtn];
       for (const b of buttons) {
         if (mx >= b.x && mx <= b.x + b.size && my >= b.y && my <= b.y + b.size) {
+          return true;
+        }
+      }
+      // Магазин бонусов слева
+      for (const key of ['b1', 'buy1', 'b2', 'buy2']) {
+        const box = shopHit[key];
+        if (box && mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h) {
           return true;
         }
       }
@@ -605,12 +643,16 @@
     function createPlatform(y, type = null) {
       const types = ['normal', 'normal', 'normal', 'moving', 'breaking', 'spring'];
       const t = type || types[Math.floor(Math.random() * types.length)];
+      // Разрушающиеся на 40% больше со всех сторон
+      const scale = t === 'breaking' ? 1.4 : 1;
+      const w = PLATFORM_WIDTH * scale;
+      const h = PLATFORM_HEIGHT * scale;
 
       return {
-        x: Math.random() * (WIDTH - PLATFORM_WIDTH),
+        x: Math.random() * (WIDTH - w),
         y: y,
-        width: PLATFORM_WIDTH,
-        height: PLATFORM_HEIGHT,
+        width: w,
+        height: h,
         type: t,
         // для двигающихся
         dir: Math.random() > 0.5 ? 1 : -1,
@@ -649,13 +691,34 @@
     }
 
     function spawnCoinsNear(y) {
-      // Много монет в воздухе вокруг этой высоты
+      // Монеты с отступами — не друг на друге
       const count = 2 + Math.floor(Math.random() * 3); // 2–4
-      for (let i = 0; i < count; i++) {
-        coins.push(createCoin(
-          20 + Math.random() * (WIDTH - 60),
-          y - 20 - Math.random() * 70
-        ));
+      const minDist = 42;
+      const placed = [];
+      let attempts = 0;
+      while (placed.length < count && attempts < 40) {
+        attempts++;
+        const cx = 24 + Math.random() * (WIDTH - 72);
+        const cy = y - 25 - Math.random() * 80;
+        let ok = true;
+        for (const p of placed) {
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          if (dx * dx + dy * dy < minDist * minDist) { ok = false; break; }
+        }
+        // Также отступ от уже существующих монет рядом
+        if (ok) {
+          for (const c of coins) {
+            if (c.collected) continue;
+            const dx = c.x - cx;
+            const dy = c.y - cy;
+            if (dx * dx + dy * dy < minDist * minDist) { ok = false; break; }
+          }
+        }
+        if (ok) {
+          placed.push({ x: cx, y: cy });
+          coins.push(createCoin(cx, cy));
+        }
       }
     }
 
@@ -753,6 +816,75 @@
       runCoins += amount;
       totalCoins += amount;
       saveProgress();
+    }
+
+    function buyBonus(which) {
+      if (which === 1) {
+        if (totalCoins >= BONUS1_PRICE) {
+          totalCoins -= BONUS1_PRICE;
+          invBonus1++;
+          saveProgress();
+          return true;
+        }
+        coinShake = 20;
+        return false;
+      }
+      if (which === 2) {
+        if (totalCoins >= BONUS2_PRICE) {
+          totalCoins -= BONUS2_PRICE;
+          invBonus2++;
+          saveProgress();
+          return true;
+        }
+        coinShake = 20;
+        return false;
+      }
+      return false;
+    }
+
+    // bonus.png — полёт; только не во время падения (на платформе / вверх)
+    function useBonus1() {
+      if (invBonus1 <= 0 || bonusActive || gameState !== 'playing' || isPaused) return false;
+      if (player.vy > 0 && !onPlatform) return false; // падает — нельзя
+      invBonus1--;
+      saveProgress();
+      bonusActive = true;
+      bonusTimer = BONUS_DURATION;
+      playBonusSound();
+      return true;
+    }
+
+    // bonus2.png — водяная защита (как у 1 персонажа), только если эффекта ещё нет
+    function useBonus2() {
+      if (invBonus2 <= 0 || gameState !== 'playing' || isPaused) return false;
+      if (extraLifeReady) return false; // уже есть защита
+      invBonus2--;
+      saveProgress();
+      extraLifeReady = true;
+      playBonusSound();
+      return true;
+    }
+
+    function updateWaterBubbles() {
+      if (!extraLifeReady) {
+        waterBubbles = [];
+        return;
+      }
+      if (waterBubbles.length < 10 && Math.random() < 0.35) {
+        waterBubbles.push({
+          ang: Math.random() * Math.PI * 2,
+          r: 0.35 + Math.random() * 0.55,
+          size: 2 + Math.random() * 4,
+          speed: 0.02 + Math.random() * 0.03,
+          life: 40 + Math.random() * 40
+        });
+      }
+      for (let i = waterBubbles.length - 1; i >= 0; i--) {
+        const b = waterBubbles[i];
+        b.ang += b.speed;
+        b.life--;
+        if (b.life <= 0) waterBubbles.splice(i, 1);
+      }
     }
 
     // ---------- УПРАВЛЕНИЕ ----------
@@ -860,18 +992,19 @@
       }
       if (gameState !== 'playing' || isPaused) return;
 
+      onPlatform = false;
+
       // --- Бонус-эффект ---
       if (bonusActive) {
         bonusTimer--;
-        // Постоянный полёт вверх (как от пружины)
         player.vy = BONUS_FLY_FORCE;
-        // Звёздочки эффекта скорости
         spawnBonusParticles();
         if (bonusTimer <= 0) {
           bonusActive = false;
         }
       }
       updateParticles();
+      updateWaterBubbles();
 
       // Горизонтальное движение (работает и во время бонуса)
       if (keys.left) {
@@ -1028,6 +1161,7 @@
 
             player.y = p.y - player.height;
             player.vy = JUMP_FORCE;
+            onPlatform = true;
 
             if (p.type === 'spring') {
               player.vy = JUMP_FORCE * 1.7;
@@ -1075,8 +1209,8 @@
       // Проверка проигрыша (во время бонуса / неуязвимости / умирания — нет)
       if (!bonusActive && invincibleTimer <= 0 && gameState === 'playing' &&
           player.y > cameraY + HEIGHT + 50) {
-        if (extraLifeReady && hasExtraLife()) {
-          // Запасная жизнь: кокон срывается, взлёт ×2 от пружины
+        if (extraLifeReady) {
+          // Водяная защита: пузырь срывается, взлёт ×2 от пружины
           extraLifeReady = false;
           player.vy = JUMP_FORCE * 1.7 * 2;
           player.y = cameraY + HEIGHT * 0.55;
@@ -1163,31 +1297,41 @@
 
     // ---------- ОТРИСОВКА ----------
     function drawBackground() {
-      if (isImageReady(bgImg)) {
-        // Параллакс: фон скроллится медленнее камеры (0.3x)
-        const parallax = 0.3;
-        const bgH = HEIGHT;
-        let offset = (-cameraY * parallax) % bgH;
-        if (offset > 0) offset -= bgH;
+      // Плавные переходы:
+      // ~5000 m  → background2 (4500–5500)
+      // ~15000 m → background3 (14500–15500)
+      const t2 = Math.max(0, Math.min(1, (score - 4500) / 1000));
+      const t3 = Math.max(0, Math.min(1, (score - 14500) / 1000));
 
+      const parallax = 0.3;
+      const bgH = HEIGHT;
+      let offset = (-cameraY * parallax) % bgH;
+      if (offset > 0) offset -= bgH;
+
+      function drawBgLayer(img, alpha) {
+        if (!isImageReady(img) || alpha <= 0.001) return;
+        ctx.globalAlpha = alpha;
         for (let i = -1; i <= 2; i++) {
-          ctx.drawImage(bgImg, 0, offset + i * bgH, WIDTH, bgH);
+          ctx.drawImage(img, 0, offset + i * bgH, WIDTH, bgH);
         }
+        ctx.globalAlpha = 1;
+      }
+
+      // alpha1 + alpha2 + alpha3 ≈ 1
+      const a3 = t3;
+      const a2 = Math.max(0, t2 - t3);
+      const a1 = Math.max(0, 1 - t2);
+
+      if (isImageReady(bgImg) || isImageReady(bg2Img) || isImageReady(bg3Img)) {
+        drawBgLayer(bgImg, a1);
+        drawBgLayer(bg2Img, a2);
+        drawBgLayer(bg3Img, a3);
       } else {
-        // Стандартный фон — градиент + облака с параллаксом
         const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
         grad.addColorStop(0, '#5B9BD5');
-        grad.addColorStop(0.6, '#87CEEB');
         grad.addColorStop(1, '#E0F7FA');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        drawCloud(60,  (80  + cameraY * 0.08) % (HEIGHT + 100) - 50, 50);
-        drawCloud(280, (180 + cameraY * 0.12) % (HEIGHT + 120) - 50, 40);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        drawCloud(150, (320 + cameraY * 0.18) % (HEIGHT + 80)  - 50, 55);
-        drawCloud(320, (450 + cameraY * 0.15) % (HEIGHT + 100) - 50, 35);
       }
     }
 
@@ -1367,17 +1511,44 @@
       const cx = drawX + drawW / 2;
       const cy = drawY + drawH * 0.7;
 
-      // Кокон только до использования жизни; после взлёта и моргания не рисуем
-      if (extraLifeReady && hasExtraLife() && invincibleTimer <= 0 && gameState === 'playing') {
+      // Водяной пузырь-спасение (1 раз) — у 1/6 по умолчанию или от bonus2
+      if (extraLifeReady && invincibleTimer <= 0 && gameState === 'playing') {
+        const rx = drawW * 0.68;
+        const ry = drawH * 0.65;
+        const bx = cx;
+        const by = cy - drawH * 0.1;
         ctx.save();
-        ctx.globalAlpha = 0.28 + Math.sin(Date.now() / 200) * 0.08;
-        ctx.strokeStyle = 'rgba(180, 230, 255, 0.7)';
+        // Вода
+        const wg = ctx.createRadialGradient(bx - rx * 0.2, by - ry * 0.3, 4, bx, by, rx);
+        wg.addColorStop(0, 'rgba(180, 230, 255, 0.35)');
+        wg.addColorStop(0.6, 'rgba(80, 180, 230, 0.22)');
+        wg.addColorStop(1, 'rgba(40, 140, 200, 0.08)');
+        ctx.fillStyle = wg;
+        ctx.beginPath();
+        ctx.ellipse(bx, by, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(200, 240, 255, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Блик воды
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.ellipse(cx, cy - drawH * 0.1, drawW * 0.65, drawH * 0.62, 0, 0, Math.PI * 2);
+        ctx.ellipse(bx - rx * 0.25, by - ry * 0.35, rx * 0.35, ry * 0.2, -0.4, 0, Math.PI * 1.2);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(160, 220, 255, 0.1)';
-        ctx.fill();
+        // Мелкие пузырьки
+        for (const bub of waterBubbles) {
+          const px = bx + Math.cos(bub.ang) * rx * bub.r;
+          const py = by + Math.sin(bub.ang) * ry * bub.r;
+          ctx.globalAlpha = Math.min(1, bub.life / 20) * 0.7;
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath();
+          ctx.arc(px, py, bub.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(150, 210, 255, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
@@ -1871,29 +2042,24 @@
     function drawScoreHUD() {
       if (gameState !== 'playing') return;
 
-      // --- Слева: монеты gold.png × N ---
-      const leftX = 12;
-      const topY = 16;
+      // --- Слева вплотную к краю: монеты ---
+      const leftX = 2;
+      const topY = 10;
       const iconSize = 26;
 
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      roundRect(leftX - 4, topY - 4, 118, 34, 10);
+      roundRect(leftX, topY - 2, 108, 32, 8);
       ctx.fill();
 
       if (isImageReady(goldImg)) {
-        ctx.drawImage(goldImg, leftX, topY, iconSize, iconSize);
-      } else {
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(leftX + iconSize / 2, topY + iconSize / 2, 11, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.drawImage(goldImg, leftX + 4, topY, iconSize, iconSize);
       }
 
       ctx.fillStyle = '#FFE082';
-      ctx.font = 'bold 17px Segoe UI, Arial';
+      ctx.font = 'bold 16px Segoe UI, Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, leftX + iconSize + 6, topY + iconSize / 2);
+      ctx.fillText('× ' + totalCoins, leftX + iconSize + 8, topY + iconSize / 2);
       ctx.textBaseline = 'alphabetic';
 
       // --- Центр: рекорд (крупно) + текущий счёт (мельче) ---
@@ -1918,6 +2084,76 @@
       ctx.fillText(score + ' m', WIDTH / 2, 50);
       ctx.textBaseline = 'alphabetic';
       ctx.textAlign = 'left';
+
+      // --- Магазин бонусов под монетами ---
+      drawBonusShop(leftX, topY + 36);
+    }
+
+    function drawBonusShop(anchorX, anchorY) {
+      shopHit = { b1: null, buy1: null, b2: null, buy2: null };
+
+      // Вплотную к левому краю
+      const colX = 2;
+      const cellW = 52;
+      const cellH = 46;
+      const buyW = 56;
+      const buyH = 22;
+      const iconSize = 30;
+      const gapY = 6;
+
+      let y = anchorY;
+
+      function centerX(w) {
+        return colX; // прижато влево
+      }
+
+      function drawBonusCell(which, img, count) {
+        const cellX = centerX(cellW);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        roundRect(cellX, y, cellW, cellH, 10);
+        ctx.fill();
+        if (which === 2 && extraLifeReady) ctx.globalAlpha = 0.45;
+        if (isImageReady(img)) {
+          ctx.drawImage(img, cellX + (cellW - iconSize) / 2, y + 3, iconSize, iconSize);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('×' + count, cellX + cellW / 2, y + cellH - 4);
+        const useBox = { x: cellX, y: y, w: cellW, h: cellH };
+        if (which === 1) shopHit.b1 = useBox; else shopHit.b2 = useBox;
+        y += cellH + 4;
+      }
+
+      function drawBuyCell(which, price) {
+        const bx = centerX(buyW);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        roundRect(bx, y, buyW, buyH, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.35)';
+        ctx.lineWidth = 1;
+        roundRect(bx, y, buyW, buyH, 8);
+        ctx.stroke();
+        if (isImageReady(goldImg)) {
+          ctx.drawImage(goldImg, bx + 4, y + 2, 18, 18);
+        }
+        ctx.fillStyle = totalCoins >= price ? '#FFE082' : '#ff8a80';
+        ctx.font = 'bold 10px Segoe UI';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('×' + price, bx + 24, y + buyH / 2);
+        ctx.textBaseline = 'alphabetic';
+        const buyBox = { x: bx, y: y, w: buyW, h: buyH };
+        if (which === 1) shopHit.buy1 = buyBox; else shopHit.buy2 = buyBox;
+        y += buyH + gapY + 4;
+      }
+
+      // Вертикально: бонус → цена → бонус → цена
+      drawBonusCell(1, bonusImg, invBonus1);
+      drawBuyCell(1, BONUS1_PRICE);
+      drawBonusCell(2, bonus2Img, invBonus2);
+      drawBuyCell(2, BONUS2_PRICE);
     }
 
     function drawCoin(c) {
@@ -2091,6 +2327,15 @@
       const my = (clientY - rect.top) * scaleY;
 
       if (gameState === 'playing') {
+        // Магазин бонусов
+        if (!isPaused) {
+          const hit = (box) => box && mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h;
+          if (hit(shopHit.buy1)) { buyBonus(1); return; }
+          if (hit(shopHit.buy2)) { buyBonus(2); return; }
+          if (hit(shopHit.b1)) { useBonus1(); return; }
+          if (hit(shopHit.b2)) { useBonus2(); return; }
+        }
+
         // Кнопки на экране паузы
         if (isPaused) {
           const c = pauseMenuBtns.continue;
