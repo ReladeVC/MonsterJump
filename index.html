@@ -76,15 +76,35 @@
       min-width: 280px;
     }
     #game-over h1 {
-      font-size: 32px;
-      margin-bottom: 8px;
-      color: #ff6b6b;
-      letter-spacing: 0.5px;
+      font-size: 24px;
+      margin-bottom: 18px;
+      color: #fff;
+      letter-spacing: 0.3px;
+      font-weight: 700;
     }
-    #game-over p {
-      font-size: 18px;
-      margin-bottom: 28px;
-      opacity: 0.9;
+    #game-over-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    #game-over-stats .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+    }
+    #game-over-stats .stat-row img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+    #game-over-stats .stat-row span {
+      min-width: 40px;
+      text-align: left;
     }
     #game-over-buttons {
       display: flex;
@@ -136,8 +156,17 @@
     <div id="ui">
       <div id="score">0</div>
       <div id="game-over">
-        <h1>Игра окончена</h1>
-        <p>Счёт: <span id="final-score">0</span></p>
+        <h1>Попробовать еще раз?</h1>
+        <div id="game-over-stats">
+          <div class="stat-row">
+            <img id="go-lider-img" alt="" />
+            <span id="final-score">0</span>
+          </div>
+          <div class="stat-row">
+            <img id="go-gold-img" alt="" />
+            <span id="final-coins">0</span>
+          </div>
+        </div>
         <div id="game-over-buttons">
           <button class="go-btn" id="menu-btn">Меню</button>
           <button class="go-btn" id="retry-btn">Повторить</button>
@@ -158,6 +187,9 @@
     const scoreEl = document.getElementById('score');
     const gameOverEl = document.getElementById('game-over');
     const finalScoreEl = document.getElementById('final-score');
+    const finalCoinsEl = document.getElementById('final-coins');
+    const goLiderImg = document.getElementById('go-lider-img');
+    const goGoldImg = document.getElementById('go-gold-img');
     const menuBtn = document.getElementById('menu-btn');
     const retryBtn = document.getElementById('retry-btn');
     const hintEl = document.getElementById('hint');
@@ -550,7 +582,7 @@
       return false;
     }
 
-    // ---------- ЗВУК ЭФФЕКТОВ (Web Audio API) ----------
+    // ---------- ЗВУК ЭФФЕКТОВ (Web Audio API, объём) ----------
     let audioCtx = null;
 
     function getAudioCtx() {
@@ -561,107 +593,269 @@
       return audioCtx;
     }
 
-    // Звук обычного прыжка
+    // Мягкая «реверберация» через delay
+    function makeSpace(ctx, input, outGain, delayTime, feedback, wet) {
+      const delay = ctx.createDelay(0.5);
+      const fb = ctx.createGain();
+      const wetG = ctx.createGain();
+      delay.delayTime.value = delayTime;
+      fb.gain.value = feedback;
+      wetG.gain.value = wet;
+      input.connect(delay);
+      delay.connect(fb);
+      fb.connect(delay);
+      delay.connect(wetG);
+      wetG.connect(outGain);
+    }
+
+    function playTone(ctx, now, { type, freq, freqEnd, dur, vol, delay = 0, filterFreq, Q }) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = type || 'sine';
+      filter.type = 'lowpass';
+      filter.frequency.value = filterFreq || 4000;
+      filter.Q.value = Q || 1;
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      makeSpace(ctx, filter, ctx.destination, 0.045, 0.22, vol * 0.35);
+
+      const t0 = now + delay;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), t0 + dur);
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    }
+
     function playJumpSound() {
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
-
+        // Короткий чистый отскок
         const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
+        const g = ctx.createGain();
+        const f = ctx.createBiquadFilter();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.exponentialRampToValueAtTime(420, now + 0.06);
-        osc.frequency.exponentialRampToValueAtTime(180, now + 0.18);
-
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-
+        f.type = 'lowpass';
+        f.frequency.value = 1000;
+        osc.connect(f);
+        f.connect(g);
+        g.connect(ctx.destination);
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(210, now + 0.07);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.exponentialRampToValueAtTime(0.11, now + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
         osc.start(now);
-        osc.stop(now + 0.25);
+        osc.stop(now + 0.1);
       } catch (e) {}
     }
 
-    // Звук пружины (более высокий и длинный)
+    // Звук проигрыша — нисходящий грустный тон
+    function playDeathSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        const master = ctx.createGain();
+        master.gain.value = 0.7;
+        master.connect(ctx.destination);
+
+        // Основной спад
+        [[400, 120, 0, 0.12], [300, 90, 0.12, 0.1], [220, 60, 0.28, 0.08]].forEach(([f0, f1, d, vol]) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          const f = ctx.createBiquadFilter();
+          osc.type = 'sine';
+          f.type = 'lowpass';
+          f.frequency.value = 1800;
+          osc.connect(f); f.connect(g); g.connect(master);
+          const t0 = now + d;
+          osc.frequency.setValueAtTime(f0, t0);
+          osc.frequency.exponentialRampToValueAtTime(f1, t0 + 0.35);
+          g.gain.setValueAtTime(0.001, t0);
+          g.gain.exponentialRampToValueAtTime(vol, t0 + 0.04);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+          osc.start(t0); osc.stop(t0 + 0.42);
+        });
+        // Низкий «удар»
+        {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'triangle';
+          osc.connect(g); g.connect(master);
+          osc.frequency.setValueAtTime(80, now);
+          osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+          g.gain.setValueAtTime(0.001, now);
+          g.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+          osc.start(now); osc.stop(now + 0.58);
+        }
+      } catch (e) {}
+    }
+
+    function spawnDeathParticles() {
+      const px = player.x + player.width / 2;
+      const py = player.y + player.height / 2;
+      for (let i = 0; i < 18; i++) {
+        const ang = (Math.PI * 2 * i) / 18 + Math.random() * 0.3;
+        const sp = 2 + Math.random() * 5;
+        particles.push({
+          x: px, y: py,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 2,
+          life: 30 + Math.random() * 25,
+          maxLife: 55,
+          size: 2 + Math.random() * 4,
+          rot: Math.random() * Math.PI,
+          rotSpeed: (Math.random() - 0.5) * 0.25,
+          kind: 'death'
+        });
+      }
+      // Дым
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          x: px + (Math.random() - 0.5) * 20,
+          y: py,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -1 - Math.random() * 2,
+          life: 35 + Math.random() * 20,
+          maxLife: 55,
+          size: 8 + Math.random() * 12,
+          rot: 0, rotSpeed: 0,
+          kind: 'smoke'
+        });
+      }
+    }
+
     function playSpringSound() {
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
-
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
-        osc.frequency.exponentialRampToValueAtTime(350, now + 0.25);
-
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.exponentialRampToValueAtTime(0.32, now + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-
-        osc.start(now);
-        osc.stop(now + 0.32);
+        playTone(ctx, now, { type: 'triangle', freq: 180, freqEnd: 720, dur: 0.2, vol: 0.2, filterFreq: 2500 });
+        playTone(ctx, now, { type: 'sine', freq: 320, freqEnd: 900, dur: 0.25, vol: 0.14, delay: 0.04, filterFreq: 3000 });
+        playTone(ctx, now, { type: 'sine', freq: 520, freqEnd: 260, dur: 0.28, vol: 0.1, delay: 0.08, filterFreq: 1800 });
       } catch (e) {}
     }
 
-    // Звук подбора бонуса
     function playBonusSound() {
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
-
-        // Два тона вверх
-        [0, 0.08, 0.16].forEach((delay, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-
-          osc.type = 'sine';
-          const freq = 400 + i * 180;
-          osc.frequency.setValueAtTime(freq, now + delay);
-          osc.frequency.exponentialRampToValueAtTime(freq * 1.3, now + delay + 0.1);
-
-          gain.gain.setValueAtTime(0.001, now + delay);
-          gain.gain.exponentialRampToValueAtTime(0.22, now + delay + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.15);
-
-          osc.start(now + delay);
-          osc.stop(now + delay + 0.18);
+        // Мощный power-up аккорд вверх
+        [0, 0.07, 0.14, 0.22].forEach((d, i) => {
+          const f = 360 + i * 160;
+          playTone(ctx, now, { type: 'sine', freq: f, freqEnd: f * 1.45, dur: 0.2, vol: 0.16 - i * 0.02, delay: d, filterFreq: 3500 });
+          playTone(ctx, now, { type: 'triangle', freq: f * 0.5, freqEnd: f * 0.7, dur: 0.22, vol: 0.08, delay: d, filterFreq: 1500 });
         });
       } catch (e) {}
     }
 
+    function playCoinSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        // Интересный мягкий перезвон: две ноты вверх + низкий хвост
+        const master = ctx.createGain();
+        master.gain.value = 0.5;
+        master.connect(ctx.destination);
+
+        function bell(freq, t0, vol, dur) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          const f = ctx.createBiquadFilter();
+          osc.type = 'sine';
+          f.type = 'lowpass';
+          f.frequency.value = 3200;
+          osc.connect(f); f.connect(g); g.connect(master);
+          osc.frequency.setValueAtTime(freq, t0);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.96, t0 + dur);
+          g.gain.setValueAtTime(0.001, t0);
+          g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+          g.gain.exponentialRampToValueAtTime(vol * 0.35, t0 + dur * 0.35);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+          osc.start(t0); osc.stop(t0 + dur + 0.02);
+        }
+
+        // Только звон без низкого гула
+        bell(1318.5, now, 0.075, 0.22);
+        bell(1568, now + 0.07, 0.065, 0.28);
+        bell(2093, now + 0.08, 0.022, 0.16);
+      } catch (e) {}
+    }
+
+    function spawnCoinParticles(x, y) {
+      // Кольцо вспышки + искры вверх
+      particles.push({
+        x, y, vx: 0, vy: 0, life: 14, maxLife: 14, size: 6,
+        rot: 0, rotSpeed: 0, kind: 'coinRing'
+      });
+      for (let i = 0; i < 6; i++) {
+        particles.push({
+          x: x + (Math.random() - 0.5) * 8,
+          y: y,
+          vx: (Math.random() - 0.5) * 2.5,
+          vy: -3 - Math.random() * 4,
+          life: 22 + Math.random() * 14,
+          maxLife: 36,
+          size: 2 + Math.random() * 2.5,
+          rot: 0,
+          rotSpeed: 0,
+          kind: 'coinSpark'
+        });
+      }
+      if (particles.length > 100) particles.splice(0, particles.length - 100);
+    }
+
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
     function resize() {
-      const scale = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
-      canvas.width = WIDTH;
-      canvas.height = HEIGHT;
-      canvas.style.width = Math.floor(WIDTH * scale) + 'px';
-      canvas.style.height = Math.floor(HEIGHT * scale) + 'px';
-
-      // Мягкое сглаживание — спрайты выглядят чисто и гармонично
+      const cssScale = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
+      // Retina / Android: рисуем в реальном разрешении экрана — ассеты не мылятся
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.floor(WIDTH * dpr);
+      canvas.height = Math.floor(HEIGHT * dpr);
+      canvas.style.width = Math.floor(WIDTH * cssScale) + 'px';
+      canvas.style.height = Math.floor(HEIGHT * cssScale) + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
     }
     window.addEventListener('resize', resize);
     resize();
 
+    // Чёткая отрисовка спрайта с сохранением пропорций в box maxW×maxH
+    function drawSprite(img, cx, cy, maxW, maxH, opts) {
+      if (!isImageReady(img)) return;
+      const nw = img.naturalWidth;
+      const nh = img.naturalHeight;
+      if (nw <= 0 || nh <= 0) return;
+      let w = maxW;
+      let h = maxW * (nh / nw);
+      if (h > maxH) {
+        h = maxH;
+        w = maxH * (nw / nh);
+      }
+      const x = Math.round(cx - w / 2);
+      const y = Math.round(cy - h / 2);
+      ctx.save();
+      if (opts && opts.shadow) {
+        ctx.shadowColor = opts.shadow;
+        ctx.shadowBlur = opts.blur || 8;
+      }
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
+    }
+
     // ---------- ГЕНЕРАЦИЯ ПЛАТФОРМ ----------
     function createPlatform(y, type = null) {
       const types = ['normal', 'normal', 'normal', 'moving', 'breaking', 'spring'];
       const t = type || types[Math.floor(Math.random() * types.length)];
-      // Разрушающиеся на 40% больше со всех сторон
-      const scale = t === 'breaking' ? 1.4 : 1;
-      const w = PLATFORM_WIDTH * scale;
-      const h = PLATFORM_HEIGHT * scale;
+      // Все платформы одного размера — как обычная статичная
+      const w = PLATFORM_WIDTH;
+      const h = PLATFORM_HEIGHT;
 
       return {
         x: Math.random() * (WIDTH - w),
@@ -831,6 +1025,8 @@
       runCoins += amount;
       totalCoins += amount;
       saveProgress();
+      playCoinSound();
+      spawnCoinParticles(c.x + c.width / 2, c.y + c.height / 2);
     }
 
     function buyBonus(which) {
@@ -1023,8 +1219,25 @@
     // ---------- ФИЗИКА И ЛОГИКА ----------
     function update() {
       if (gameState === 'dying') {
-        player.vy += GRAVITY * 1.2;
+        player.vy += GRAVITY * 1.15;
         player.y += player.vy;
+        player.x += player.vx * 0.4;
+        player.vx *= 0.98;
+        updateParticles();
+        // Иногда сыпать дым
+        if (dyingTimer % 6 === 0) {
+          particles.push({
+            x: player.x + player.width / 2 + (Math.random() - 0.5) * 20,
+            y: player.y + player.height * 0.5,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: -0.5 - Math.random(),
+            life: 25 + Math.random() * 15,
+            maxLife: 40,
+            size: 6 + Math.random() * 10,
+            rot: 0, rotSpeed: 0,
+            kind: 'smoke'
+          });
+        }
         if (dyingTimer > 0) {
           dyingTimer--;
           if (dyingTimer <= 0) {
@@ -1275,11 +1488,24 @@
       }
     }
 
+    function fillGameOverStats() {
+      // Lider.png × метры за попытку | gold.png × монеты за забег
+      finalScoreEl.textContent = '× ' + score + ' m';
+      finalCoinsEl.textContent = '× ' + runCoins;
+      if (isImageReady(liderImg)) goLiderImg.src = liderImg.src;
+      else goLiderImg.removeAttribute('src');
+      if (isImageReady(goldImg)) goGoldImg.src = goldImg.src;
+      else goGoldImg.removeAttribute('src');
+    }
+
     function startDeathAnimation() {
       gameState = 'dying';
-      dyingTimer = 70;
-      player.vx = 0;
-      finalScoreEl.textContent = score + ' m';
+      dyingTimer = 90;
+      player.vx = (Math.random() - 0.5) * 3;
+      player.vy = Math.min(player.vy, 2);
+      playDeathSound();
+      spawnDeathParticles();
+      fillGameOverStats();
       if (score > bestScore) {
         bestScore = score;
         saveProgress();
@@ -1290,7 +1516,7 @@
 
     function gameOver() {
       gameState = 'gameover';
-      finalScoreEl.textContent = score + ' m';
+      fillGameOverStats();
       if (score > bestScore) {
         bestScore = score;
         saveProgress();
@@ -1492,22 +1718,62 @@
 
     // ---------- ЧАСТИЦЫ (звёздочки при бонусе) ----------
     function spawnBonusParticles() {
-      // 2-3 звёздочки за кадр
-      for (let i = 0; i < 3; i++) {
+      const px = player.x + player.width / 2;
+      const py = player.y + player.height * 0.4;
+      // Плотный ветер
+      for (let i = 0; i < 8; i++) {
         particles.push({
-          x: player.x + player.width / 2 + (Math.random() - 0.5) * 40,
-          y: player.y + player.height / 2 + (Math.random() - 0.5) * 30,
-          vx: (Math.random() - 0.5) * 3,
-          vy: Math.random() * 4 + 2, // летят вниз относительно персонажа
-          life: 25 + Math.random() * 20,
-          maxLife: 45,
-          size: 3 + Math.random() * 5,
-          rot: Math.random() * Math.PI * 2,
-          rotSpeed: (Math.random() - 0.5) * 0.3
+          x: px + (Math.random() - 0.5) * (player.width * 2.8),
+          y: py + Math.random() * 30,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: 10 + Math.random() * 10,
+          life: 14 + Math.random() * 12,
+          maxLife: 26,
+          size: 14 + Math.random() * 28,
+          rot: 0, rotSpeed: 0,
+          kind: 'wind'
         });
       }
-      // Ограничиваем количество
-      if (particles.length > 80) particles.splice(0, particles.length - 80);
+      // Искры / плазма
+      for (let i = 0; i < 4; i++) {
+        particles.push({
+          x: px + (Math.random() - 0.5) * 40,
+          y: py + (Math.random() - 0.5) * 30,
+          vx: (Math.random() - 0.5) * 4,
+          vy: 2 + Math.random() * 5,
+          life: 20 + Math.random() * 15,
+          maxLife: 35,
+          size: 2 + Math.random() * 3,
+          rot: Math.random() * Math.PI,
+          rotSpeed: (Math.random() - 0.5) * 0.3,
+          kind: 'plasma'
+        });
+      }
+      // Кольца ударной волны (редко)
+      if (Math.random() < 0.12) {
+        particles.push({
+          x: px, y: py + 20,
+          vx: 0, vy: 3,
+          life: 20, maxLife: 20, size: 8,
+          rot: 0, rotSpeed: 0,
+          kind: 'shockwave'
+        });
+      }
+      // Звёзды скорости
+      if (Math.random() < 0.35) {
+        particles.push({
+          x: px + (Math.random() - 0.5) * 50,
+          y: py + 10,
+          vx: (Math.random() - 0.5) * 2,
+          vy: 6 + Math.random() * 4,
+          life: 18 + Math.random() * 10,
+          maxLife: 28,
+          size: 4 + Math.random() * 4,
+          rot: Math.random() * Math.PI, rotSpeed: 0.2,
+          kind: 'star'
+        });
+      }
+      if (particles.length > 140) particles.splice(0, particles.length - 140);
     }
 
     function updateParticles() {
@@ -1515,8 +1781,20 @@
         const p = particles[i];
         p.x += p.vx;
         p.y += p.vy;
+        if (p.kind === 'coinSpark' || p.kind === 'death') {
+          p.vy += 0.12;
+          p.vx *= 0.97;
+        } else if (p.kind === 'wind') {
+          p.y += 4 + Math.random() * 3;
+        } else if (p.kind === 'plasma') {
+          p.vy += 0.08;
+        } else if (p.kind === 'smoke') {
+          p.vy -= 0.05;
+          p.size += 0.15;
+          p.vx *= 0.98;
+        }
         p.life--;
-        p.rot += p.rotSpeed;
+        p.rot += p.rotSpeed || 0;
         if (p.life <= 0) particles.splice(i, 1);
       }
     }
@@ -1524,30 +1802,99 @@
     function drawParticles() {
       for (const p of particles) {
         const screenY = p.y - cameraY;
-        if (screenY < -20 || screenY > HEIGHT + 20) continue;
+        if (screenY < -40 || screenY > HEIGHT + 40) continue;
         const alpha = Math.max(0, p.life / p.maxLife);
         ctx.save();
         ctx.translate(p.x, screenY);
-        ctx.rotate(p.rot);
         ctx.globalAlpha = alpha;
-        // Звёздочка
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-          const r = i % 2 === 0 ? p.size : p.size * 0.4;
-          const px = Math.cos(angle) * r;
-          const py = Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
+
+        if (p.kind === 'coinRing') {
+          const r = p.size + (1 - alpha) * 18;
+          ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (p.kind === 'coinSpark') {
+          ctx.fillStyle = '#FFE082';
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.kind === 'wind') {
+          const grad = ctx.createLinearGradient(0, 0, 0, p.size);
+          grad.addColorStop(0, `rgba(255,255,255,${alpha * 0.85})`);
+          grad.addColorStop(0.5, `rgba(180,220,255,${alpha * 0.4})`);
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.5 + Math.random();
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo((Math.random() - 0.5) * 2, 0);
+          ctx.lineTo(0, p.size);
+          ctx.stroke();
+        } else if (p.kind === 'plasma') {
+          ctx.fillStyle = `rgba(255, ${180 + Math.random() * 50 | 0}, 80, ${alpha})`;
+          ctx.shadowColor = '#FF6D00';
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        } else if (p.kind === 'shockwave') {
+          const r = p.size + (1 - alpha) * 55;
+          ctx.strokeStyle = `rgba(255, 230, 150, ${alpha * 0.7})`;
+          ctx.lineWidth = 3 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(255, 120, 40, ${alpha * 0.4})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (p.kind === 'star') {
+          ctx.rotate(p.rot || 0);
+          ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`;
+          ctx.shadowColor = '#FFD700';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+            const r = i % 2 === 0 ? p.size : p.size * 0.4;
+            const px = Math.cos(angle) * r;
+            const py = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        } else if (p.kind === 'death') {
+          ctx.rotate(p.rot || 0);
+          ctx.fillStyle = `rgba(255, ${100 + Math.random() * 80 | 0}, 60, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.kind === 'smoke') {
+          ctx.fillStyle = `rgba(80, 80, 90, ${alpha * 0.35})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.rotate(p.rot || 0);
+          ctx.fillStyle = '#FFD700';
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+            const r = i % 2 === 0 ? p.size : p.size * 0.4;
+            const px = Math.cos(angle) * r;
+            const py = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
         }
-        ctx.closePath();
-        ctx.fill();
-        // Блик
-        ctx.fillStyle = '#FFFde7';
-        ctx.beginPath();
-        ctx.arc(0, 0, p.size * 0.25, 0, Math.PI * 2);
-        ctx.fill();
         ctx.restore();
       }
       ctx.globalAlpha = 1;
@@ -1557,7 +1904,23 @@
       const screenY = player.y - cameraY;
       const img = currentPlayerImg;
       const scale = bonusActive ? BONUS_SCALE : 1;
-      const tilt = Math.max(-0.25, Math.min(0.25, player.vx * 0.04));
+      // Наклон; squash/stretch только без бонуса (в шаре — без вытягивания)
+      const tilt = Math.max(-0.28, Math.min(0.28, player.vx * 0.045));
+      const speedY = Math.abs(player.vy);
+      let stretchY = 1;
+      let stretchX = 1;
+      if (!bonusActive) {
+        if (player.vy < -2) {
+          stretchY = 1 + Math.min(0.18, speedY * 0.012);
+          stretchX = 1 / stretchY;
+        } else if (player.vy > 4) {
+          stretchY = 1 - Math.min(0.12, speedY * 0.008);
+          stretchX = 1 / stretchY;
+        }
+        const moveStretch = Math.min(0.1, Math.abs(player.vx) * 0.012);
+        stretchX *= 1 + moveStretch;
+        stretchY *= 1 - moveStretch * 0.5;
+      }
 
       // Моргание при неуязвимости после запасной жизни
       if (invincibleTimer > 0 && Math.floor(invincibleTimer / 6) % 2 === 0) {
@@ -1568,9 +1931,8 @@
       let deathAlpha = 1;
       let deathSpin = 0;
       if (gameState === 'dying') {
-        deathAlpha = Math.max(0, dyingTimer / 70);
-        deathSpin = (70 - dyingTimer) * 0.12;
-        player.vy = Math.max(player.vy, 2);
+        deathAlpha = Math.max(0, dyingTimer / 90);
+        deathSpin = (90 - dyingTimer) * 0.1;
       }
 
       const aspect = isImageReady(img) ? img.naturalWidth / img.naturalHeight : 0.8;
@@ -1580,6 +1942,58 @@
       const drawY = screenY + player.height - drawH;
       const cx = drawX + drawW / 2;
       const cy = drawY + drawH * 0.7;
+
+      // Мега-аура при полёте на шаре
+      if (bonusActive && gameState === 'playing') {
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 80);
+        ctx.save();
+        // Внешнее свечение
+        const g1 = ctx.createRadialGradient(cx, cy - drawH * 0.15, drawW * 0.2, cx, cy - drawH * 0.15, drawW * 1.1);
+        g1.addColorStop(0, `rgba(255, 200, 50, ${0.35 + pulse * 0.15})`);
+        g1.addColorStop(0.45, `rgba(255, 120, 40, ${0.18 + pulse * 0.1})`);
+        g1.addColorStop(1, 'rgba(255, 80, 0, 0)');
+        ctx.fillStyle = g1;
+        ctx.beginPath();
+        ctx.arc(cx, cy - drawH * 0.15, drawW * 1.1, 0, Math.PI * 2);
+        ctx.fill();
+        // Энергетические кольца
+        for (let i = 0; i < 3; i++) {
+          const rr = drawW * (0.45 + i * 0.18) + pulse * 6;
+          ctx.strokeStyle = `rgba(255, ${220 - i * 40}, 80, ${0.35 - i * 0.08})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy - drawH * 0.1, rr, rr * 0.55, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // Спиральные блики
+        ctx.strokeStyle = `rgba(255,255,255,${0.25 + pulse * 0.15})`;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 4; i++) {
+          const a = Date.now() / 200 + i * Math.PI / 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy - drawH * 0.15, drawW * 0.55, a, a + 0.6);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // След только при обычном движении (в бонусе — ветер + аура)
+      if (gameState === 'playing' && !bonusActive && (Math.abs(player.vx) > 1.5 || player.vy < -3)) {
+        for (let i = 1; i <= 3; i++) {
+          const t = i / 4;
+          const ox = -player.vx * i * 1.8;
+          const oy = -player.vy * i * 0.35;
+          ctx.save();
+          ctx.globalAlpha = 0.12 * (1 - t) * deathAlpha;
+          ctx.translate(cx + ox, cy + oy);
+          ctx.rotate(tilt);
+          ctx.scale(stretchX * (1 - t * 0.15), stretchY * (1 - t * 0.15));
+          if (isImageReady(img)) {
+            ctx.drawImage(img, -drawW / 2, -drawH * 0.7, drawW, drawH);
+          }
+          ctx.restore();
+        }
+      }
 
       // Водяной пузырь-спасение (1 раз) — у 1/6 по умолчанию или от bonus2
       if (extraLifeReady && invincibleTimer <= 0 && gameState === 'playing') {
@@ -1626,6 +2040,7 @@
       ctx.globalAlpha = deathAlpha;
       ctx.translate(cx, cy);
       ctx.rotate(tilt + deathSpin);
+      ctx.scale(stretchX, stretchY);
 
       if (isImageReady(img)) {
         ctx.shadowColor = 'rgba(255,255,255,0.15)';
@@ -1642,35 +2057,13 @@
       const screenY = b.y - cameraY;
       if (screenY < -50 || screenY > HEIGHT + 50) return;
 
-      // Мягкое свечение под бонусом
+      const cx = b.x + b.width / 2;
+      const cy = screenY + b.height / 2;
       ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
       ctx.beginPath();
-      ctx.arc(b.x + b.width / 2, screenY + b.height / 2, 24, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 26, 0, Math.PI * 2);
       ctx.fill();
-
-      if (isImageReady(bonusImg)) {
-        // Фиксированный размер ~40px по большей стороне, пропорции сохраняем
-        const nw = bonusImg.naturalWidth;
-        const nh = bonusImg.naturalHeight;
-        const maxSize = 42;
-        let w, h;
-        if (nw >= nh) {
-          w = maxSize;
-          h = maxSize * (nh / nw);
-        } else {
-          h = maxSize;
-          w = maxSize * (nw / nh);
-        }
-        const x = b.x + (b.width - w) / 2;
-        const y = screenY + (b.height - h) / 2;
-
-        ctx.save();
-        ctx.shadowColor = 'rgba(255, 180, 0, 0.45)';
-        ctx.shadowBlur = 12;
-        ctx.drawImage(bonusImg, x, y, w, h);
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      }
+      drawSprite(bonusImg, cx, cy, 48, 48, { shadow: 'rgba(255, 180, 0, 0.4)', blur: 10 });
     }
 
     function roundRect(x, y, w, h, r) {
@@ -2101,6 +2494,17 @@
         pauseMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
       }
 
+      // Эффект проигрыша — затемнение + красная вспышка (без текста)
+      if (gameState === 'dying') {
+        const t = 1 - dyingTimer / 90;
+        if (t < 0.25) {
+          ctx.fillStyle = `rgba(180, 30, 40, ${(0.25 - t) * 1.2})`;
+          ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        }
+        ctx.fillStyle = `rgba(10, 8, 20, ${t * 0.65})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+
       // Виньетка
       const vignette = ctx.createRadialGradient(WIDTH/2, HEIGHT/2, HEIGHT*0.3, WIDTH/2, HEIGHT/2, HEIGHT*0.9);
       vignette.addColorStop(0, 'rgba(0,0,0,0)');
@@ -2115,21 +2519,19 @@
       // --- Слева вплотную к краю: монеты ---
       const leftX = 2;
       const topY = 10;
-      const iconSize = 26;
+      const iconSize = 28;
 
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      roundRect(leftX, topY - 2, 108, 32, 8);
+      roundRect(leftX, topY - 2, 112, 34, 8);
       ctx.fill();
 
-      if (isImageReady(goldImg)) {
-        ctx.drawImage(goldImg, leftX + 4, topY, iconSize, iconSize);
-      }
+      drawSprite(goldImg, leftX + 4 + iconSize / 2, topY + iconSize / 2, iconSize, iconSize);
 
       ctx.fillStyle = '#FFE082';
       ctx.font = 'bold 16px Segoe UI, Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, leftX + iconSize + 8, topY + iconSize / 2);
+      ctx.fillText('× ' + totalCoins, leftX + iconSize + 10, topY + iconSize / 2);
       ctx.textBaseline = 'alphabetic';
 
       // --- Центр: рекорд (крупно) + текущий счёт (мельче) ---
@@ -2162,76 +2564,69 @@
     function drawBonusShop(anchorX, anchorY) {
       shopHit = { b1: null, buy1: null, b2: null, buy2: null, b3: null, buy3: null };
 
-      // Вплотную к левому краю
       const colX = 2;
-      const cellW = 52;
-      const cellH = 46;
-      const buyW = 56;
-      const buyH = 22;
-      const iconSize = 30;
-      const gapY = 6;
+      const cellW = 56;
+      const cellH = 52;
+      const buyW = 60;
+      const buyH = 24;
+      const iconBox = 40; // крупнее и чётче
+      const gapY = 5;
 
       let y = anchorY;
 
-      function centerX(w) {
-        return colX; // прижато влево
-      }
-
       function drawBonusCell(which, img, count) {
-        const cellX = centerX(cellW);
+        const cellX = colX;
         const cd = which === 1 ? cdBonus1 : (which === 2 ? cdBonus2 : cdBonus3);
         const busy = (which === 1 && bonusActive) || (which === 2 && extraLifeReady) || (which === 3 && jumpBoostTimer > 0);
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         roundRect(cellX, y, cellW, cellH, 10);
         ctx.fill();
 
-        const ix = cellX + (cellW - iconSize) / 2;
-        const iy = y + 3;
-        const cx = ix + iconSize / 2;
-        const cy = iy + iconSize / 2;
+        const cx = cellX + cellW / 2;
+        const cy = y + iconBox / 2 + 4;
 
         if (busy || cd > 0) ctx.globalAlpha = 0.4;
-        if (isImageReady(img)) {
-          ctx.drawImage(img, ix, iy, iconSize, iconSize);
-        }
+        drawSprite(img, cx, cy, iconBox, iconBox);
         ctx.globalAlpha = 1;
 
-        // Кольцо перезарядки вокруг умения
         if (cd > 0) {
           const progress = 1 - cd / ABILITY_COOLDOWN;
+          const ringR = iconBox / 2 + 3;
           ctx.beginPath();
           ctx.strokeStyle = 'rgba(0,0,0,0.45)';
           ctx.lineWidth = 3;
-          ctx.arc(cx, cy, iconSize / 2 + 2, 0, Math.PI * 2);
+          ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
           ctx.stroke();
           ctx.beginPath();
           ctx.strokeStyle = which === 1 ? '#FFD700' : (which === 2 ? '#4FC3F7' : '#CE93D8');
           ctx.lineWidth = 3;
           ctx.lineCap = 'round';
-          ctx.arc(cx, cy, iconSize / 2 + 2, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+          ctx.arc(cx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
           ctx.stroke();
-          // Секунды
           ctx.fillStyle = '#fff';
-          ctx.font = 'bold 11px Segoe UI';
+          ctx.font = 'bold 12px Segoe UI';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(String(Math.ceil(cd / 60)), cx, cy);
           ctx.textBaseline = 'alphabetic';
         }
 
+        // Количество в правом нижнем углу рамки
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 11px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.fillText('×' + count, cellX + cellW / 2, y + cellH - 4);
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('×' + count, cellX + cellW - 5, y + cellH - 4);
+        ctx.textBaseline = 'alphabetic';
         const useBox = { x: cellX, y: y, w: cellW, h: cellH };
         if (which === 1) shopHit.b1 = useBox;
         else if (which === 2) shopHit.b2 = useBox;
         else shopHit.b3 = useBox;
-        y += cellH + 4;
+        y += cellH + 3;
       }
 
       function drawBuyCell(which, price) {
-        const bx = centerX(buyW);
+        const bx = colX;
         ctx.fillStyle = 'rgba(0,0,0,0.4)';
         roundRect(bx, y, buyW, buyH, 8);
         ctx.fill();
@@ -2239,23 +2634,20 @@
         ctx.lineWidth = 1;
         roundRect(bx, y, buyW, buyH, 8);
         ctx.stroke();
-        if (isImageReady(goldImg)) {
-          ctx.drawImage(goldImg, bx + 4, y + 2, 18, 18);
-        }
+        drawSprite(goldImg, bx + 11, y + buyH / 2, 14, 14);
         ctx.fillStyle = totalCoins >= price ? '#FFE082' : '#ff8a80';
-        ctx.font = 'bold 10px Segoe UI';
+        ctx.font = 'bold 11px Segoe UI';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('×' + price, bx + 24, y + buyH / 2);
+        ctx.fillText('×' + price, bx + 20, y + buyH / 2);
         ctx.textBaseline = 'alphabetic';
         const buyBox = { x: bx, y: y, w: buyW, h: buyH };
         if (which === 1) shopHit.buy1 = buyBox;
         else if (which === 2) shopHit.buy2 = buyBox;
         else shopHit.buy3 = buyBox;
-        y += buyH + gapY + 4;
+        y += buyH + gapY + 3;
       }
 
-      // Вертикально: бонус → цена
       drawBonusCell(1, bonusImg, invBonus1);
       drawBuyCell(1, BONUS1_PRICE);
       drawBonusCell(2, bonus2Img, invBonus2);
@@ -2269,17 +2661,10 @@
       const screenY = c.y - cameraY + Math.sin(c.phase) * 3;
       if (screenY < -40 || screenY > HEIGHT + 40) return;
 
-      const size = 26;
-      const x = c.x + (c.width - size) / 2;
-      const y = screenY + (c.height - size) / 2;
-
-      if (isImageReady(goldImg)) {
-        ctx.save();
-        ctx.shadowColor = 'rgba(255, 200, 0, 0.35)';
-        ctx.shadowBlur = 8;
-        ctx.drawImage(goldImg, x, y, size, size);
-        ctx.restore();
-      }
+      const size = 32;
+      const cx = c.x + c.width / 2;
+      const cy = screenY + c.height / 2;
+      drawSprite(goldImg, cx, cy, size, size, { shadow: 'rgba(255, 200, 0, 0.35)', blur: 6 });
     }
 
     function drawHUDButtons() {
