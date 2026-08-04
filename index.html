@@ -697,6 +697,26 @@
       } catch (e) {}
     }
 
+    function spawnPlatformDust(x, y) {
+      // Пыль при касании платформы
+      for (let i = 0; i < 7; i++) {
+        const dir = (Math.random() - 0.5);
+        particles.push({
+          x: x + dir * 18,
+          y: y - 2,
+          vx: dir * (1.2 + Math.random() * 2.2),
+          vy: -0.8 - Math.random() * 1.8,
+          life: 14 + Math.random() * 12,
+          maxLife: 26,
+          size: 2 + Math.random() * 3.5,
+          rot: 0,
+          rotSpeed: 0,
+          kind: 'dust'
+        });
+      }
+      if (particles.length > 140) particles.splice(0, particles.length - 140);
+    }
+
     function spawnDeathParticles() {
       const px = player.x + player.width / 2;
       const py = player.y + player.height / 2;
@@ -1428,6 +1448,7 @@
             const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
             player.vy = JUMP_FORCE * jumpMul;
             onPlatform = true;
+            spawnPlatformDust(player.x + player.width / 2, p.y);
 
             if (p.type === 'spring') {
               player.vy = JUMP_FORCE * 1.7 * jumpMul;
@@ -1785,6 +1806,10 @@
           p.vy -= 0.05;
           p.size += 0.15;
           p.vx *= 0.98;
+        } else if (p.kind === 'dust') {
+          p.vy += 0.12;
+          p.vx *= 0.92;
+          p.size *= 0.97;
         }
         p.life--;
         p.rot += p.rotSpeed || 0;
@@ -1872,6 +1897,11 @@
           ctx.fillStyle = `rgba(80, 80, 90, ${alpha * 0.35})`;
           ctx.beginPath();
           ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.kind === 'dust') {
+          ctx.fillStyle = `rgba(210, 190, 150, ${alpha * 0.7})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(0.5, p.size), 0, Math.PI * 2);
           ctx.fill();
         } else {
           ctx.rotate(p.rot || 0);
