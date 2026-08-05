@@ -265,16 +265,42 @@
     let pauseImg = null;
     let soundImg = null;
 
-    // 0 — жизнь, 1 — ×2 монеты, 2 — магнит, 3 — ×2 высота + не ломает платформы
+    // 0 — жизнь, 1 — ×2 монеты, 2 — магнит, 3 — ×2 высота + не ломает + −25% пад.
     // 4 — 15000m, 5 — 25000m все силы
     const CHAR_INFO = [
-      { price: 0, unlock: 'free', label: 'Запасная жизнь' },
-      { price: 2500, unlock: 'coins', label: '×2 монеты' },
-      { price: 7500, unlock: 'coins', label: 'Магнит' },
-      { price: 100000, unlock: 'coins', label: '×2 высота · крепкий' },
-      { price: 0, unlock: 'height', heightReq: 15000, label: 'Медл. ×2 монеты' },
-      { price: 0, unlock: 'height', heightReq: 25000, label: 'Все силы' }
+      {
+        name: 'Pip',
+        price: 0, unlock: 'free', label: 'Запасная жизнь',
+        desc: 'Запасная жизнь: один раз при падении спасает водяной кокон и выбрасывает вверх. Подходит новичкам.'
+      },
+      {
+        name: 'Janko',
+        price: 2500, unlock: 'coins', label: '×2 монеты',
+        desc: 'Жадный до золота: все собранные монеты считаются ×2. Идеален для быстрой прокачки.'
+      },
+      {
+        name: 'Zora',
+        price: 7500, unlock: 'coins', label: 'Магнит',
+        desc: 'Магнит: монеты сами летят к персонажу. Удобно на высокой скорости и в полёте.'
+      },
+      {
+        name: 'Brutus',
+        price: 100000, unlock: 'coins', label: '×2 выс. · −25% пад.',
+        desc: '×2 к набору высоты. Не ломает разрушающиеся платформы. Падение на 25% медленнее.'
+      },
+      {
+        name: 'Luma',
+        price: 0, unlock: 'height', heightReq: 15000, label: 'Медл. ×2 монеты',
+        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2. Открывается рекордом 15 000 m.'
+      },
+      {
+        name: 'Hex',
+        price: 0, unlock: 'height', heightReq: 25000, label: 'Все силы',
+        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, высота ×2, падение −50%. Открывается рекордом 25 000 m.'
+      }
     ];
+    let charInfoPopup = -1; // индекс персонажа для окна способностей, -1 = закрыто
+    let titleInfoBtns = []; // hitbox кнопок «!»
     const CHAR_PRICES = CHAR_INFO.map(c => c.price);
     let selectedCharacter = 0;
     let currentPlayerImg = null;
@@ -289,7 +315,14 @@
       return selectedCharacter === 3 || selectedCharacter === 4 || selectedCharacter === 5;
     }
     function hasSlowFall() {
-      return selectedCharacter === 4 || selectedCharacter === 5;
+      // 5-й и 6-й: полное замедление; 4-й: половина эффекта
+      return selectedCharacter === 3 || selectedCharacter === 4 || selectedCharacter === 5;
+    }
+    // Множитель гравитации при падении: 1 = обычно, 0.5 = −50%, 0.75 = −25% (половина эффекта 5-го)
+    function fallGravityMul() {
+      if (selectedCharacter === 4 || selectedCharacter === 5) return 0.5;
+      if (selectedCharacter === 3) return 0.75;
+      return 1;
     }
     function hasExtraLife() {
       return selectedCharacter === 0 || selectedCharacter === 5;
@@ -828,26 +861,24 @@
     }
 
     function spawnCoinParticles(x, y) {
-      // Кольцо вспышки + искры вверх
-      particles.push({
-        x, y, vx: 0, vy: 0, life: 14, maxLife: 14, size: 6,
-        rot: 0, rotSpeed: 0, kind: 'coinRing'
-      });
-      for (let i = 0; i < 6; i++) {
+      // Искры при сборе монеты
+      for (let i = 0; i < 10; i++) {
+        const ang = (Math.PI * 2 * i) / 10 + Math.random() * 0.35;
+        const sp = 2.5 + Math.random() * 4;
         particles.push({
-          x: x + (Math.random() - 0.5) * 8,
+          x: x,
           y: y,
-          vx: (Math.random() - 0.5) * 2.5,
-          vy: -3 - Math.random() * 4,
-          life: 22 + Math.random() * 14,
-          maxLife: 36,
-          size: 2 + Math.random() * 2.5,
-          rot: 0,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 1.2,
+          life: 12 + Math.random() * 10,
+          maxLife: 22,
+          size: 6 + Math.random() * 8, // длина искры
+          rot: ang,
           rotSpeed: 0,
           kind: 'coinSpark'
         });
       }
-      if (particles.length > 100) particles.splice(0, particles.length - 100);
+      if (particles.length > 120) particles.splice(0, particles.length - 120);
     }
 
     // ---------- ИНИЦИАЛИЗАЦИЯ ----------
@@ -1329,11 +1360,12 @@
       if (player.x > WIDTH) player.x = -player.width;
 
       // Гравитация (не во время бонуса)
-      // Slow fall (−50%) только при падении — высота прыжка как у всех
+      // Slow fall только при падении — высота прыжка как у всех
+      // 5/6: −50% | 4: −25% (половина эффекта 5-го)
       if (!bonusActive) {
         let g = GRAVITY;
-        if (hasSlowFall() && player.vy > 0) {
-          g = GRAVITY * 0.5;
+        if (player.vy > 0) {
+          g = GRAVITY * fallGravityMul();
         }
         player.vy += g;
       }
@@ -1815,7 +1847,12 @@
         const p = particles[i];
         p.x += p.vx;
         p.y += p.vy;
-        if (p.kind === 'coinSpark' || p.kind === 'death') {
+        if (p.kind === 'coinSpark') {
+          p.vx *= 0.94;
+          p.vy *= 0.94;
+          p.vy += 0.05;
+          p.size *= 0.96;
+        } else if (p.kind === 'death') {
           p.vy += 0.12;
           p.vx *= 0.97;
         } else if (p.kind === 'wind') {
@@ -1846,18 +1883,23 @@
         ctx.translate(p.x, screenY);
         ctx.globalAlpha = alpha;
 
-        if (p.kind === 'coinRing') {
-          const r = p.size + (1 - alpha) * 18;
-          ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
-          ctx.lineWidth = 2.5;
+        if (p.kind === 'coinSpark') {
+          // Яркая искра-линия
+          const len = Math.max(2, p.size);
+          ctx.rotate(p.rot || 0);
+          ctx.strokeStyle = `rgba(255, 240, 150, ${alpha})`;
+          ctx.lineWidth = 1.8;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(len, 0);
           ctx.stroke();
-        } else if (p.kind === 'coinSpark') {
-          ctx.fillStyle = '#FFE082';
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.85})`;
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(len * 0.55, 0);
+          ctx.stroke();
         } else if (p.kind === 'wind') {
           const grad = ctx.createLinearGradient(0, 0, 0, p.size);
           grad.addColorStop(0, `rgba(255,255,255,${alpha * 0.85})`);
@@ -2192,41 +2234,46 @@
       if (secretFlashTimer > 0) secretFlashTimer--;
       for (let k = 1; k <= 5; k++) if (charShake[k] > 0) charShake[k]--;
 
-      // Баланс монет на титуле (тряска при нехватке / вспышка при коде)
+      // Баланс монет — как в игре (y=10, h=48, в линии со sound)
       const coinOx = coinShake > 0 ? Math.sin(coinShake * 1.8) * 5 : 0;
       const coinOy = coinShake > 0 ? Math.cos(coinShake * 2.2) * 3 : 0;
-      const coinPanelW = secretFlashTimer > 0 ? 150 : 120;
+      const tTop = 10;
+      const tBarH = 48;
+      const tLeft = 2;
+      const tIcon = 30;
+      const coinPanelW = secretFlashTimer > 0 ? 160 : 118;
       ctx.fillStyle = secretFlashTimer > 0
         ? 'rgba(255, 215, 0, 0.45)'
-        : 'rgba(0,0,0,0.35)';
-      roundRect(12 + coinOx, 12 + coinOy, coinPanelW, 32, 10);
+        : 'rgba(0,0,0,0.28)';
+      roundRect(tLeft + coinOx, tTop + coinOy, coinPanelW, tBarH, 8);
       ctx.fill();
       const titleCoinIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
-      if (isImageReady(titleCoinIcon)) {
-        drawSprite(titleCoinIcon, 28 + coinOx, 28 + coinOy, 26, 26);
-      }
+      drawSprite(titleCoinIcon, tLeft + 6 + tIcon / 2 + coinOx, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
       ctx.fillStyle = secretFlashTimer > 0 ? '#fff' : '#FFE082';
-      ctx.font = 'bold 16px Segoe UI';
+      ctx.font = 'bold 16px Segoe UI, Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, 46 + coinOx, 28 + coinOy);
+      ctx.fillText('× ' + totalCoins, tLeft + tIcon + 12 + coinOx, tTop + tBarH / 2 + coinOy);
       ctx.textBaseline = 'alphabetic';
       if (secretFlashTimer > 0) {
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 12px Segoe UI';
-        ctx.fillText(secretFlashText, 44 + coinOx + 70, 28 + coinOy);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(secretFlashText, tLeft + tIcon + 12 + coinOx + 70, tTop + tBarH / 2 + coinOy);
+        ctx.textBaseline = 'alphabetic';
       }
 
-      // Подпись
+      // Подпись — выше
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.font = '16px Segoe UI, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Выбери персонажа', WIDTH / 2, 240);
+      ctx.fillText('Выбери персонажа', WIDTH / 2, 218);
 
       // --- 6 персонажей (2×3) ---
       const positions = getCharPositions();
       const colors = ['#FFEB3B', '#4FC3F7', '#FF8A65', '#CE93D8', '#80CBC4', '#FFD54F'];
       titleLayout._buyBtns = [];
+      titleInfoBtns = [];
 
       for (let i = 0; i < 6; i++) {
         const shakeT = charShake[i] || 0;
@@ -2290,6 +2337,33 @@
           ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
         }
 
+        // Кнопка «!» — внутри рамки, правый верхний угол
+        const infoR = 10;
+        const infoCx = cardX + cardW - infoR - 6;
+        const infoCy = cardY + infoR + 6;
+        ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
+        ctx.beginPath();
+        ctx.arc(infoCx, infoCy, infoR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = 'bold 13px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('!', infoCx, infoCy + 1);
+        ctx.textBaseline = 'alphabetic';
+        titleInfoBtns.push({ i, x: infoCx - infoR - 3, y: infoCy - infoR - 3, w: infoR * 2 + 6, h: infoR * 2 + 6 });
+
+        // Имя ниже рамки
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(info.name, x + size / 2, cardY + cardH + 10);
+        ctx.textBaseline = 'alphabetic';
+
         if (!unlocked) {
           ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.5)' : 'rgba(0,0,0,0.5)';
           roundRect(cardX, cardY, cardW, cardH, radius);
@@ -2305,7 +2379,7 @@
           const buyW = size + 6;
           const buyH = 24;
           const buyX = baseX - 3;
-          const buyY = baseY + size + 6;
+          const buyY = baseY + size + 28;
 
           if (info.unlock === 'coins') {
             const canAfford = totalCoins >= info.price;
@@ -2338,20 +2412,6 @@
             ctx.fillText((info.heightReq / 1000) + 'k m', buyX + 24 + sx, buyY + buyH / 2 + sy);
             ctx.textBaseline = 'alphabetic';
           }
-        } else {
-          // Описание способности — белые буквы
-          const labelY = y + size + 22;
-          ctx.font = 'bold 11px Segoe UI, Arial';
-          const tw = ctx.measureText(info.label).width + 12;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-          roundRect(x + size / 2 - tw / 2, labelY - 9, tw, 18, 8);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 11px Segoe UI, Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(info.label, x + size / 2, labelY);
-          ctx.textBaseline = 'alphabetic';
         }
       }
 
@@ -2393,6 +2453,91 @@
 
       // Кнопка музыки на титуле
       drawHUDButtons();
+
+      // Окно полного описания способностей
+      if (charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) {
+        const info = CHAR_INFO[charInfoPopup];
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        const pw = Math.min(320, WIDTH - 40);
+        const ph = 210;
+        const px = (WIDTH - pw) / 2;
+        const py = (HEIGHT - ph) / 2 - 20;
+        ctx.fillStyle = 'rgba(26, 28, 46, 0.97)';
+        roundRect(px, py, pw, ph, 18);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1.5;
+        roundRect(px, py, pw, ph, 18);
+        ctx.stroke();
+
+        // Аватар
+        const av = 56;
+        const img = playerImgs[charInfoPopup];
+        if (isImageReady(img)) {
+          const aspect = img.naturalWidth / img.naturalHeight;
+          let dw = av, dh = av / aspect;
+          if (dh > av) { dh = av; dw = av * aspect; }
+          ctx.drawImage(img, px + 20 + (av - dw) / 2, py + 18 + (av - dh) / 2, dw, dh);
+        }
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px Segoe UI, Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(info.name, px + 20 + av + 14, py + 30);
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.font = '12px Segoe UI, Arial';
+        ctx.fillText(info.label, px + 20 + av + 14, py + 52);
+        ctx.textBaseline = 'alphabetic';
+
+        // Описание
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '14px Segoe UI, Arial';
+        const lines = wrapText(info.desc, pw - 40);
+        let ty = py + 90;
+        for (const line of lines) {
+          ctx.fillText(line, px + 20, ty);
+          ty += 20;
+        }
+
+        // Кнопка закрыть
+        const cx = px + pw - 28;
+        const cy = py + 22;
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('×', cx, cy + 1);
+        ctx.textBaseline = 'alphabetic';
+        titleLayout._infoClose = { x: cx - 16, y: cy - 16, w: 32, h: 32 };
+        titleLayout._infoPanel = { x: px, y: py, w: pw, h: ph };
+      } else {
+        titleLayout._infoClose = null;
+        titleLayout._infoPanel = null;
+      }
+    }
+
+    function wrapText(text, maxW) {
+      const words = text.split(' ');
+      const lines = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxW && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
     }
 
     function drawLoadingScreen() {
@@ -2761,6 +2906,30 @@
 
       // Любой клик на титуле — пробуем запустить музыку
       startMusic();
+
+      // Окно описания: закрытие
+      if (charInfoPopup >= 0) {
+        const cl = titleLayout._infoClose;
+        const panel = titleLayout._infoPanel;
+        if (cl && mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) {
+          charInfoPopup = -1;
+          return;
+        }
+        // Клик вне панели — закрыть
+        if (panel && !(mx >= panel.x && mx <= panel.x + panel.w && my >= panel.y && my <= panel.y + panel.h)) {
+          charInfoPopup = -1;
+          return;
+        }
+        return; // клик внутри панели — ничего
+      }
+
+      // Кнопки «!» у персонажей
+      for (const b of titleInfoBtns) {
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+          charInfoPopup = b.i;
+          return;
+        }
+      }
 
       // Кнопка музыки на титуле
       {
