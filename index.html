@@ -239,8 +239,11 @@
       music:           'assets/music.mp3',
       lider:           'assets/Lider.png',
       gold:            'assets/gold.png',
+      allgold:         'assets/allgold.png',
       bonus2:          'assets/bonus2.png',
-      bonus3:          'assets/bonus3.png'
+      bonus3:          'assets/bonus3.png',
+      pause:           'assets/pause.png',
+      sound:           'assets/sound.png'
     };
 
     let titleNameImg = null;
@@ -258,14 +261,17 @@
     let bg3Img = null;
     let liderImg = null;
     let goldImg = null;
+    let allgoldImg = null;
+    let pauseImg = null;
+    let soundImg = null;
 
-    // 0 — жизнь (кокон), 1 — ×2 монеты 2500, 2 — магнит 7500
-    // 3 — ×2 высота 100000, 4 — 15000m (−50% пад. ×2×2), 5 — 25000m (все силы)
+    // 0 — жизнь, 1 — ×2 монеты, 2 — магнит, 3 — ×2 высота + не ломает платформы
+    // 4 — 15000m, 5 — 25000m все силы
     const CHAR_INFO = [
       { price: 0, unlock: 'free', label: 'Запасная жизнь' },
       { price: 2500, unlock: 'coins', label: '×2 монеты' },
       { price: 7500, unlock: 'coins', label: 'Магнит' },
-      { price: 100000, unlock: 'coins', label: '×2 высота' },
+      { price: 100000, unlock: 'coins', label: '×2 высота · крепкий' },
       { price: 0, unlock: 'height', heightReq: 15000, label: 'Медл. ×2 монеты' },
       { price: 0, unlock: 'height', heightReq: 25000, label: 'Все силы' }
     ];
@@ -287,6 +293,10 @@
     }
     function hasExtraLife() {
       return selectedCharacter === 0 || selectedCharacter === 5;
+    }
+    // 4-й персонаж: прыгает по разрушающимся и не ломает их
+    function hasSafeBreak() {
+      return selectedCharacter === 3;
     }
 
     const SECRET_CODES = {
@@ -452,6 +462,15 @@
     goldImg           = loadImageWithFallback([
       'assets/gold.png', 'assets/Gold.png', 'assets/GOLD.png'
     ]);
+    allgoldImg        = loadImageWithFallback([
+      'assets/allgold.png', 'assets/Allgold.png', 'assets/ALLGOLD.png'
+    ]);
+    pauseImg          = loadImageWithFallback([
+      'assets/pause.png', 'assets/Pause.png', 'assets/PAUSE.png'
+    ]);
+    soundImg          = loadImageWithFallback([
+      'assets/sound.png', 'assets/Sound.png', 'assets/SOUND.png'
+    ]);
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
@@ -561,8 +580,9 @@
     }
 
     // Координаты UI-кнопок (нужны и для кликов, и для отрисовки)
-    const pauseBtn = { x: WIDTH - 50, y: 16, size: 36 };
-    const musicBtn = { x: WIDTH - 96, y: 16, size: 36 };
+    // sound правее, pause слева — крупнее
+    const musicBtn = { x: WIDTH - 56, y: 10, size: 48 };
+    const pauseBtn = { x: WIDTH - 112, y: 10, size: 48 };
     const pauseMenuBtns = { continue: null, menu: null };
 
     function isHudClick(mx, my) {
@@ -1456,7 +1476,7 @@
             } else {
               playJumpSound();
             }
-            if (p.type === 'breaking') {
+            if (p.type === 'breaking' && !hasSafeBreak()) {
               p.broken = true;
               p.breakTimer = 0;
             }
@@ -2181,19 +2201,15 @@
         : 'rgba(0,0,0,0.35)';
       roundRect(12 + coinOx, 12 + coinOy, coinPanelW, 32, 10);
       ctx.fill();
-      if (isImageReady(goldImg)) {
-        ctx.drawImage(goldImg, 16 + coinOx, 15 + coinOy, 24, 24);
-      } else {
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(28 + coinOx, 28 + coinOy, 10, 0, Math.PI * 2);
-        ctx.fill();
+      const titleCoinIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
+      if (isImageReady(titleCoinIcon)) {
+        drawSprite(titleCoinIcon, 28 + coinOx, 28 + coinOy, 26, 26);
       }
       ctx.fillStyle = secretFlashTimer > 0 ? '#fff' : '#FFE082';
       ctx.font = 'bold 16px Segoe UI';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, 44 + coinOx, 28 + coinOy);
+      ctx.fillText('× ' + totalCoins, 46 + coinOx, 28 + coinOy);
       ctx.textBaseline = 'alphabetic';
       if (secretFlashTimer > 0) {
         ctx.fillStyle = '#FFD700';
@@ -2444,12 +2460,12 @@
 
       drawPlayer();
 
-      // Индикатор бонуса (полоска времени)
+      // Индикатор полёта — ниже рамки рекорда (topY 10 + h 48 + отступ)
       if (bonusActive) {
         const barW = 120;
         const barH = 10;
         const barX = (WIDTH - barW) / 2;
-        const barY = 60;
+        const barY = 68;
         const progress = bonusTimer / BONUS_DURATION;
 
         ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -2539,49 +2555,52 @@
     function drawScoreHUD() {
       if (gameState !== 'playing') return;
 
-      // --- Слева вплотную к краю: монеты ---
-      const leftX = 2;
+      // Единая верхняя линия как у pause/sound (y=10, h=48)
       const topY = 10;
-      const iconSize = 28;
+      const barH = 48;
+      const leftX = 2;
+      const iconSize = 30;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      roundRect(leftX, topY - 2, 112, 34, 8);
+      // --- Слева: монеты (высота как у кнопок) ---
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      roundRect(leftX, topY, 118, barH, 8);
       ctx.fill();
 
-      drawSprite(goldImg, leftX + 4 + iconSize / 2, topY + iconSize / 2, iconSize, iconSize);
+      const totalIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
+      drawSprite(totalIcon, leftX + 6 + iconSize / 2, topY + barH / 2, iconSize, iconSize);
 
       ctx.fillStyle = '#FFE082';
       ctx.font = 'bold 16px Segoe UI, Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, leftX + iconSize + 10, topY + iconSize / 2);
+      ctx.fillText('× ' + totalCoins, leftX + iconSize + 12, topY + barH / 2);
       ctx.textBaseline = 'alphabetic';
 
-      // --- Центр: рекорд (крупно) + текущий счёт (мельче) ---
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      roundRect(WIDTH / 2 - 70, 12, 140, 52, 12);
+      // --- Центр: рекорд + текущий (та же высота и линия) ---
+      const scoreW = 150;
+      const scoreX = (WIDTH - scoreW) / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      roundRect(scoreX, topY, scoreW, barH, 8);
       ctx.fill();
 
-      // Иконка лидера + рекорд
-      const lx = WIDTH / 2 - 55;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Рекорд сверху в рамке
       if (isImageReady(liderImg)) {
-        ctx.drawImage(liderImg, lx, 16, 22, 22);
+        drawSprite(liderImg, scoreX + 20, topY + 16, 20, 20);
       }
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 20px Segoe UI, Arial';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(bestScore + ' m', WIDTH / 2 + 8, 27);
-
-      // Текущий счёт меньше
+      ctx.font = 'bold 16px Segoe UI, Arial';
+      ctx.fillText(bestScore + ' m', scoreX + scoreW / 2 + 8, topY + 16);
+      // Текущий счёт снизу в той же рамке
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = '14px Segoe UI, Arial';
-      ctx.fillText(score + ' m', WIDTH / 2, 50);
+      ctx.font = '13px Segoe UI, Arial';
+      ctx.fillText(score + ' m', scoreX + scoreW / 2, topY + 34);
       ctx.textBaseline = 'alphabetic';
       ctx.textAlign = 'left';
 
-      // --- Магазин бонусов под монетами ---
-      drawBonusShop(leftX, topY + 36);
+      // --- Бонусы ниже верхней линии ---
+      drawBonusShop(leftX, topY + barH + 10);
     }
 
     function drawBonusShop(anchorX, anchorY) {
@@ -2691,61 +2710,37 @@
     }
 
     function drawHUDButtons() {
-      // --- Пауза (только в игре) ---
+      // --- Пауза (только в игре) — pause.png ---
       if (gameState === 'playing') {
         const { x, y, size } = pauseBtn;
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         roundRect(x, y, size, size, 8);
         ctx.fill();
-
-        ctx.fillStyle = '#fff';
+        if (isImageReady(pauseImg)) {
+          drawSprite(pauseImg, x + size / 2, y + size / 2, size - 6, size - 6);
+        }
+        // Если на паузе — лёгкая подсветка
         if (isPaused) {
-          ctx.beginPath();
-          ctx.moveTo(x + 12, y + 10);
-          ctx.lineTo(x + 12, y + size - 10);
-          ctx.lineTo(x + size - 10, y + size / 2);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          ctx.fillRect(x + 11, y + 10, 5, size - 20);
-          ctx.fillRect(x + 20, y + 10, 5, size - 20);
+          ctx.strokeStyle = 'rgba(78, 205, 196, 0.7)';
+          ctx.lineWidth = 2;
+          roundRect(x, y, size, size, 8);
+          ctx.stroke();
         }
       }
 
-      // --- Музыка (титул + игра) ---
+      // --- Звук (титул + игра) — sound.png, правее ---
       if (gameState === 'title' || gameState === 'playing') {
         const { x, y, size } = musicBtn;
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         roundRect(x, y, size, size, 8);
         ctx.fill();
-
-        ctx.fillStyle = musicEnabled ? '#fff' : '#ff6b6b';
-        // Иконка ноты / динамика
-        const cx = x + size / 2;
-        const cy = y + size / 2;
-        // Корпус динамика
-        ctx.beginPath();
-        ctx.moveTo(cx - 8, cy - 5);
-        ctx.lineTo(cx - 2, cy - 5);
-        ctx.lineTo(cx + 5, cy - 11);
-        ctx.lineTo(cx + 5, cy + 11);
-        ctx.lineTo(cx - 2, cy + 5);
-        ctx.lineTo(cx - 8, cy + 5);
-        ctx.closePath();
-        ctx.fill();
-
-        if (musicEnabled) {
-          // Волны звука
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(cx + 6, cy, 5, -0.7, 0.7);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(cx + 6, cy, 9, -0.7, 0.7);
-          ctx.stroke();
-        } else {
-          // Перечёркнуто
+        if (isImageReady(soundImg)) {
+          ctx.save();
+          if (!musicEnabled) ctx.globalAlpha = 0.4;
+          drawSprite(soundImg, x + size / 2, y + size / 2, size - 6, size - 6);
+          ctx.restore();
+        }
+        if (!musicEnabled) {
           ctx.strokeStyle = '#ff6b6b';
           ctx.lineWidth = 2.5;
           ctx.beginPath();
