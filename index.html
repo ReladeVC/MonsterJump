@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Doodle Jump Clone</title>
+  <title>Monster Jump</title>
   <style>
     * {
       margin: 0;
@@ -178,7 +178,7 @@
 
   <script>
     // =====================================================
-    //  DOODLE JUMP CLONE — полностью рабочая версия
+    //  MONSTER JUMP — полностью рабочая версия
     //  Замени ассеты в разделе ASSETS ниже
     // =====================================================
 
@@ -243,11 +243,21 @@
       bonus2:          'assets/bonus2.png',
       bonus3:          'assets/bonus3.png',
       pause:           'assets/pause.png',
-      sound:           'assets/sound.png'
+      sound:           'assets/sound.png',
+      level:           'assets/level.png',
+      note:            'assets/note.png',
+      setting:         'assets/setting.png',
+      home:            'assets/Home.png',
+      next:            'assets/next.png'
     };
 
     let titleNameImg = null;
     let startBtnImg = null;
+    let levelImg = null;
+    let noteImg = null;
+    let settingImg = null;
+    let homeImg = null;
+    let nextImg = null;
     let playerImgs = [null, null, null, null, null, null];
     let platformImg = null;
     let brokenPlatformImg = null;
@@ -334,7 +344,8 @@
 
     const SECRET_CODES = {
       monstergold: 'coins',
-      monsterall: 'unlock'
+      monsterall: 'unlock',
+      monsterdell: 'reset'
     };
     let secretBuffer = '';
     let secretFlashTimer = 0;
@@ -504,6 +515,21 @@
     soundImg          = loadImageWithFallback([
       'assets/sound.png', 'assets/Sound.png', 'assets/SOUND.png'
     ]);
+    levelImg          = loadImageWithFallback([
+      'assets/level.png', 'assets/Level.png', 'assets/LEVEL.png'
+    ]);
+    noteImg           = loadImageWithFallback([
+      'assets/note.png', 'assets/Note.png', 'assets/NOTE.png'
+    ]);
+    settingImg        = loadImageWithFallback([
+      'assets/setting.png', 'assets/Setting.png', 'assets/SETTING.png'
+    ]);
+    homeImg           = loadImageWithFallback([
+      'assets/Home.png', 'assets/home.png', 'assets/HOME.png'
+    ]);
+    nextImg           = loadImageWithFallback([
+      'assets/next.png', 'assets/Next.png', 'assets/NEXT.png'
+    ]);
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
@@ -562,12 +588,116 @@
     // ---------- МУЗЫКА (фоновый слой) ----------
     let musicEnabled = true;
     let musicStarted = false;
+    let musicVol = 0.22;
+    let sfxVol = 0.7;
+    try {
+      musicVol = parseFloat(localStorage.getItem('monsterJumpMusicVol') || '0.22');
+      sfxVol = parseFloat(localStorage.getItem('monsterJumpSfxVol') || '0.7');
+      if (localStorage.getItem('monsterJumpMusicOn') === '0') musicEnabled = false;
+    } catch (e) {}
+
+    // Меню: null | 'levels' | 'missions' | 'settings'
+    let titleMenu = null;
+    let levelPage = 0; // страницы по 50 уровней
+    let missionPage = 0;
+    let currentLevel = 0; // 0 = endless, 1..100 = уровень
+    let levelTarget = 0;
+    let levelWinLevel = 0; // какой уровень только что пройден
+    let levelWinTimer = 0;
+    let levelWinBtns = { home: null, next: null };
+    let maxLevelUnlocked = 1;
+    let levelsCompleted = {};
+    let missionsDone = {};
+    try {
+      maxLevelUnlocked = parseInt(localStorage.getItem('monsterJumpMaxLevel') || '1', 10) || 1;
+      levelsCompleted = JSON.parse(localStorage.getItem('monsterJumpLevelsDone') || '{}') || {};
+      missionsDone = JSON.parse(localStorage.getItem('monsterJumpMissions') || '{}') || {};
+    } catch (e) {}
+
+    // 100 уровней: цель высоты растёт плавно
+    function getLevelTarget(n) {
+      // 1→300m … 100→~25000m
+      return Math.floor(250 + n * 90 + n * n * 1.6);
+    }
+    function isLevelUnlocked(n) {
+      return n <= maxLevelUnlocked;
+    }
+
+    // 50 заданий
+    const MISSIONS = [
+      { id: 1, text: 'Достигни 500 m за забег', type: 'height', need: 500, reward: 100 },
+      { id: 2, text: 'Собери 20 монет за забег', type: 'coins_run', need: 20, reward: 80 },
+      { id: 3, text: 'Сыграй 3 партии', type: 'plays', need: 3, reward: 60 },
+      { id: 4, text: 'Достигни 1000 m', type: 'height', need: 1000, reward: 150 },
+      { id: 5, text: 'Собери 50 монет за забег', type: 'coins_run', need: 50, reward: 120 },
+      { id: 6, text: 'Используй бонус полёта 1 раз', type: 'use_bonus1', need: 1, reward: 100 },
+      { id: 7, text: 'Используй защиту 1 раз', type: 'use_bonus2', need: 1, reward: 100 },
+      { id: 8, text: 'Достигни 2000 m', type: 'height', need: 2000, reward: 200 },
+      { id: 9, text: 'Собери 100 монет за всё время', type: 'coins_total', need: 100, reward: 150 },
+      { id: 10, text: 'Пройди уровень 5', type: 'level', need: 5, reward: 200 },
+      { id: 11, text: 'Достигни 3000 m', type: 'height', need: 3000, reward: 250 },
+      { id: 12, text: 'Собери 80 монет за забег', type: 'coins_run', need: 80, reward: 180 },
+      { id: 13, text: 'Сыграй 10 партий', type: 'plays', need: 10, reward: 150 },
+      { id: 14, text: 'Используй ×2 прыжок', type: 'use_bonus3', need: 1, reward: 120 },
+      { id: 15, text: 'Достигни 5000 m', type: 'height', need: 5000, reward: 350 },
+      { id: 16, text: 'Собери 500 монет всего', type: 'coins_total', need: 500, reward: 250 },
+      { id: 17, text: 'Пройди уровень 10', type: 'level', need: 10, reward: 300 },
+      { id: 18, text: 'Достигни 7000 m', type: 'height', need: 7000, reward: 400 },
+      { id: 19, text: 'Собери 120 монет за забег', type: 'coins_run', need: 120, reward: 280 },
+      { id: 20, text: 'Сыграй 25 партий', type: 'plays', need: 25, reward: 220 },
+      { id: 21, text: 'Достигни 10000 m', type: 'height', need: 10000, reward: 500 },
+      { id: 22, text: 'Собери 1000 монет всего', type: 'coins_total', need: 1000, reward: 400 },
+      { id: 23, text: 'Пройди уровень 20', type: 'level', need: 20, reward: 450 },
+      { id: 24, text: 'Используй полёт 5 раз', type: 'use_bonus1', need: 5, reward: 200 },
+      { id: 25, text: 'Используй защиту 5 раз', type: 'use_bonus2', need: 5, reward: 200 },
+      { id: 26, text: 'Достигни 12000 m', type: 'height', need: 12000, reward: 550 },
+      { id: 27, text: 'Собери 200 монет за забег', type: 'coins_run', need: 200, reward: 400 },
+      { id: 28, text: 'Сыграй 50 партий', type: 'plays', need: 50, reward: 350 },
+      { id: 29, text: 'Пройди уровень 30', type: 'level', need: 30, reward: 600 },
+      { id: 30, text: 'Достигни 15000 m', type: 'height', need: 15000, reward: 700 },
+      { id: 31, text: 'Собери 2500 монет всего', type: 'coins_total', need: 2500, reward: 500 },
+      { id: 32, text: 'Используй ×2 прыжок 5 раз', type: 'use_bonus3', need: 5, reward: 250 },
+      { id: 33, text: 'Пройди уровень 40', type: 'level', need: 40, reward: 750 },
+      { id: 34, text: 'Достигни 18000 m', type: 'height', need: 18000, reward: 800 },
+      { id: 35, text: 'Собери 300 монет за забег', type: 'coins_run', need: 300, reward: 550 },
+      { id: 36, text: 'Сыграй 75 партий', type: 'plays', need: 75, reward: 450 },
+      { id: 37, text: 'Пройди уровень 50', type: 'level', need: 50, reward: 900 },
+      { id: 38, text: 'Достигни 20000 m', type: 'height', need: 20000, reward: 1000 },
+      { id: 39, text: 'Собери 5000 монет всего', type: 'coins_total', need: 5000, reward: 700 },
+      { id: 40, text: 'Используй полёт 15 раз', type: 'use_bonus1', need: 15, reward: 400 },
+      { id: 41, text: 'Пройди уровень 60', type: 'level', need: 60, reward: 1100 },
+      { id: 42, text: 'Достигни 22000 m', type: 'height', need: 22000, reward: 1200 },
+      { id: 43, text: 'Собери 400 монет за забег', type: 'coins_run', need: 400, reward: 700 },
+      { id: 44, text: 'Сыграй 100 партий', type: 'plays', need: 100, reward: 600 },
+      { id: 45, text: 'Пройди уровень 75', type: 'level', need: 75, reward: 1500 },
+      { id: 46, text: 'Достигни 25000 m', type: 'height', need: 25000, reward: 1800 },
+      { id: 47, text: 'Собери 10000 монет всего', type: 'coins_total', need: 10000, reward: 1200 },
+      { id: 48, text: 'Пройди уровень 90', type: 'level', need: 90, reward: 2000 },
+      { id: 49, text: 'Пройди уровень 100', type: 'level', need: 100, reward: 5000 },
+      { id: 50, text: 'Собери 500 монет за один забег', type: 'coins_run', need: 500, reward: 2500 }
+    ];
+    let missionStats = { plays: 0, use_bonus1: 0, use_bonus2: 0, use_bonus3: 0 };
+    try {
+      missionStats = JSON.parse(localStorage.getItem('monsterJumpMissionStats') || '{"plays":0,"use_bonus1":0,"use_bonus2":0,"use_bonus3":0}') || missionStats;
+    } catch (e) {}
+
+    function saveMetaProgress() {
+      try {
+        localStorage.setItem('monsterJumpMaxLevel', String(maxLevelUnlocked));
+        localStorage.setItem('monsterJumpLevelsDone', JSON.stringify(levelsCompleted));
+        localStorage.setItem('monsterJumpMissions', JSON.stringify(missionsDone));
+        localStorage.setItem('monsterJumpMissionStats', JSON.stringify(missionStats));
+        localStorage.setItem('monsterJumpMusicVol', String(musicVol));
+        localStorage.setItem('monsterJumpSfxVol', String(sfxVol));
+        localStorage.setItem('monsterJumpMusicOn', musicEnabled ? '1' : '0');
+      } catch (e) {}
+    }
 
     // Пробуем несколько путей (регистр важен на GitHub)
     const music = new Audio();
     music.loop = true;
     music.preload = 'auto';
-    music.volume = 0.22; // тихо на фоне, SFX слышны отдельно
+    music.volume = musicVol;
 
     (function initMusicSrc() {
       const candidates = [
@@ -665,6 +795,7 @@
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
+      const v = (vol || 0.1) * sfxVol;
       osc.type = type || 'sine';
       filter.type = 'lowpass';
       filter.frequency.value = filterFreq || 4000;
@@ -672,13 +803,13 @@
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
-      makeSpace(ctx, filter, ctx.destination, 0.045, 0.22, vol * 0.35);
+      makeSpace(ctx, filter, ctx.destination, 0.045, 0.22, v * 0.35);
 
       const t0 = now + delay;
       osc.frequency.setValueAtTime(freq, t0);
       if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), t0 + dur);
       gain.gain.setValueAtTime(0.001, t0);
-      gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(v, t0 + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
       osc.start(t0);
       osc.stop(t0 + dur + 0.02);
@@ -1142,6 +1273,8 @@
       saveProgress();
       bonusActive = true;
       bonusTimer = BONUS_DURATION;
+      missionStats.use_bonus1 = (missionStats.use_bonus1 || 0) + 1;
+      saveMetaProgress();
       playBonusSound();
       return true;
     }
@@ -1154,6 +1287,8 @@
       saveProgress();
       extraLifeReady = true;
       cdBonus2 = ABILITY_COOLDOWN;
+      missionStats.use_bonus2 = (missionStats.use_bonus2 || 0) + 1;
+      saveMetaProgress();
       playBonusSound();
       return true;
     }
@@ -1164,6 +1299,8 @@
       invBonus3--;
       saveProgress();
       jumpBoostTimer = JUMP_BOOST_DURATION;
+      missionStats.use_bonus3 = (missionStats.use_bonus3 || 0) + 1;
+      saveMetaProgress();
       playBonusSound();
       return true;
     }
@@ -1196,7 +1333,7 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
       if (e.code === 'Space' && gameState === 'gameover') retryGame();
 
-      // Секретные коды: monstergold / monsterall
+      // Секретные коды: monstergold / monsterall / monsterdell
       if (e.key && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
         secretBuffer += e.key.toLowerCase();
         if (secretBuffer.length > 12) {
@@ -1215,6 +1352,20 @@
           secretBuffer = '';
           secretFlashTimer = 90;
           secretFlashText = 'ALL';
+          coinShake = 18;
+        } else if (secretBuffer.endsWith('monsterdell')) {
+          // Сброс всех покупок и прогресса
+          totalCoins = 0;
+          unlockedChars = [true, false, false, false, false, false];
+          invBonus1 = 0;
+          invBonus2 = 0;
+          invBonus3 = 0;
+          bestScore = 0;
+          selectedCharacter = 0;
+          saveProgress();
+          secretBuffer = '';
+          secretFlashTimer = 90;
+          secretFlashText = 'DEL';
           coinShake = 18;
         }
       }
@@ -1289,6 +1440,26 @@
 
     // ---------- ФИЗИКА И ЛОГИКА ----------
     function update() {
+      if (gameState === 'levelwin') {
+        levelWinTimer++;
+        updateParticles();
+        // Редкие искры
+        if (levelWinTimer % 4 === 0) {
+          particles.push({
+            x: Math.random() * WIDTH,
+            y: -10,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 2 + Math.random() * 3,
+            life: 40 + Math.random() * 20,
+            maxLife: 60,
+            size: 2 + Math.random() * 4,
+            rot: Math.random() * Math.PI,
+            rotSpeed: 0.1,
+            kind: 'win'
+          });
+        }
+        return;
+      }
       if (gameState === 'dying') {
         player.vy += GRAVITY * 1.15;
         player.y += player.vy;
@@ -1528,6 +1699,10 @@
           bestScore = score;
           saveProgress();
         }
+        // Победа на уровне
+        if (currentLevel > 0 && levelTarget > 0 && score >= levelTarget) {
+          triggerLevelWin(currentLevel);
+        }
       }
       // Убрать подсказку управления при движении вверх
       if (maxHeight > 2 && hintEl.style.display !== 'none') {
@@ -1561,6 +1736,47 @@
       }
     }
 
+    function triggerLevelWin(cleared) {
+      levelWinLevel = cleared;
+      levelsCompleted[cleared] = true;
+      if (cleared >= maxLevelUnlocked && cleared < 100) maxLevelUnlocked = cleared + 1;
+      const reward = 50 + cleared;
+      totalCoins += reward;
+      saveProgress();
+      saveMetaProgress();
+      playBonusSound();
+      if (runCoins > bestRunCoins) {
+        bestRunCoins = runCoins;
+        try { localStorage.setItem('monsterJumpBestRunCoins', String(bestRunCoins)); } catch (e) {}
+      }
+      // Конфетти / искры победы
+      for (let i = 0; i < 40; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = 2 + Math.random() * 6;
+        particles.push({
+          x: WIDTH / 2 + (Math.random() - 0.5) * 80,
+          y: HEIGHT * 0.4 + (Math.random() - 0.5) * 40,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 3,
+          life: 40 + Math.random() * 30,
+          maxLife: 70,
+          size: 3 + Math.random() * 5,
+          rot: Math.random() * Math.PI,
+          rotSpeed: (Math.random() - 0.5) * 0.3,
+          kind: 'win'
+        });
+      }
+      levelWinTimer = 0;
+      gameState = 'levelwin';
+      isPaused = false;
+      keys.left = false;
+      keys.right = false;
+      hintEl.style.display = 'none';
+      scoreEl.style.display = 'none';
+      gameOverEl.style.display = 'none';
+      // currentLevel оставляем до нажатия Next
+    }
+
     function fillGameOverStats() {
       // Lider.png × метры за попытку | gold.png × монеты за забег
       finalScoreEl.textContent = '× ' + score + ' m';
@@ -1583,6 +1799,12 @@
         bestScore = score;
         saveProgress();
       }
+      if (runCoins > bestRunCoins) {
+        bestRunCoins = runCoins;
+        try { localStorage.setItem('monsterJumpBestRunCoins', String(bestRunCoins)); } catch (e) {}
+      }
+      currentLevel = 0;
+      levelTarget = 0;
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
     }
@@ -1602,6 +1824,8 @@
     function startGame() {
       getAudioCtx();
       startMusic();
+      missionStats.plays = (missionStats.plays || 0) + 1;
+      saveMetaProgress();
 
       currentPlayerImg = playerImgs[selectedCharacter];
 
@@ -1867,6 +2091,9 @@
           p.vy += 0.12;
           p.vx *= 0.92;
           p.size *= 0.97;
+        } else if (p.kind === 'win') {
+          p.vy += 0.08;
+          p.vx *= 0.99;
         }
         p.life--;
         p.rot += p.rotSpeed || 0;
@@ -1965,6 +2192,11 @@
           ctx.beginPath();
           ctx.arc(0, 0, Math.max(0.5, p.size), 0, Math.PI * 2);
           ctx.fill();
+        } else if (p.kind === 'win') {
+          const colors = ['#FFD700', '#4ecdc4', '#FF8A65', '#CE93D8', '#fff'];
+          ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+          ctx.globalAlpha = alpha;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
         } else {
           ctx.rotate(p.rot || 0);
           ctx.fillStyle = '#FFD700';
@@ -2165,12 +2397,12 @@
     // Координаты элементов (для кликов)
     const titleLayout = {
       charSize: 72,
-      charY: 255,
+      charY: 248,
       charGap: 18,
-      rowGap: 110,
+      rowGap: 148, // место под имя + кнопку покупки
       startBtnW: 180,
       startBtnH: 70,
-      startBtnY: 560,
+      startBtnY: 590,
       _buyBtns: []
     };
 
@@ -2267,7 +2499,7 @@
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.font = '16px Segoe UI, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Выбери персонажа', WIDTH / 2, 218);
+      ctx.fillText('Выбери персонажа', WIDTH / 2, 192);
 
       // --- 6 персонажей (2×3) ---
       const positions = getCharPositions();
@@ -2356,12 +2588,12 @@
         ctx.textBaseline = 'alphabetic';
         titleInfoBtns.push({ i, x: infoCx - infoR - 3, y: infoCy - infoR - 3, w: infoR * 2 + 6, h: infoR * 2 + 6 });
 
-        // Имя ниже рамки
+        // Имя над персонажем
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 12px Segoe UI, Arial';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(info.name, x + size / 2, cardY + cardH + 10);
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(info.name, x + size / 2, cardY - 4);
         ctx.textBaseline = 'alphabetic';
 
         if (!unlocked) {
@@ -2376,10 +2608,11 @@
           ctx.fillText('🔒', x + size / 2, y + size / 2 - 2);
           ctx.textBaseline = 'alphabetic';
 
+          // Покупка под персонажем
           const buyW = size + 6;
           const buyH = 24;
           const buyX = baseX - 3;
-          const buyY = baseY + size + 28;
+          const buyY = cardY + cardH + 6;
 
           if (info.unlock === 'coins') {
             const canAfford = totalCoins >= info.price;
@@ -2415,44 +2648,45 @@
         }
       }
 
-      // --- Кнопка Старт ---
-      const btnX = (WIDTH - titleLayout.startBtnW) / 2;
-      const btnY = titleLayout.startBtnY;
-
-      if (isImageReady(startBtnImg)) {
-        const aspect = startBtnImg.naturalWidth / startBtnImg.naturalHeight;
-        let bw = titleLayout.startBtnW;
-        let bh = bw / aspect;
-        if (bh > 80) {
-          bh = 80;
-          bw = bh * aspect;
-        }
-        ctx.drawImage(startBtnImg, (WIDTH - bw) / 2, btnY, bw, bh);
-        // Сохраняем реальные размеры для клика
-        titleLayout._btnX = (WIDTH - bw) / 2;
-        titleLayout._btnY = btnY;
-        titleLayout._btnW = bw;
-        titleLayout._btnH = bh;
-      } else {
-        // Fallback кнопка
-        ctx.fillStyle = '#4ecdc4';
-        roundRect(btnX, btnY, titleLayout.startBtnW, titleLayout.startBtnH, 16);
+      // --- 4 кнопки в ряд: Start | Level | Note | Setting ---
+      const menuImgs = [startBtnImg, levelImg, noteImg, settingImg];
+      const menuKeys = ['start', 'levels', 'missions', 'settings'];
+      const btnSize = 64;
+      const btnGap = 12;
+      const rowW = 4 * btnSize + 3 * btnGap;
+      const rowX = (WIDTH - rowW) / 2;
+      const rowY = titleLayout.startBtnY;
+      titleLayout._menuBtns = [];
+      for (let i = 0; i < 4; i++) {
+        const bx = rowX + i * (btnSize + btnGap);
+        const by = rowY;
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
+        roundRect(bx, by, btnSize, btnSize, 12);
         ctx.fill();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.font = 'bold 26px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('START', WIDTH / 2, btnY + titleLayout.startBtnH / 2);
-        ctx.textBaseline = 'alphabetic';
-
-        titleLayout._btnX = btnX;
-        titleLayout._btnY = btnY;
-        titleLayout._btnW = titleLayout.startBtnW;
-        titleLayout._btnH = titleLayout.startBtnH;
+        const img = menuImgs[i];
+        if (isImageReady(img)) {
+          drawSprite(img, bx + btnSize / 2, by + btnSize / 2, btnSize - 10, btnSize - 10);
+        } else {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(menuKeys[i].slice(0, 5).toUpperCase(), bx + btnSize / 2, by + btnSize / 2);
+          ctx.textBaseline = 'alphabetic';
+        }
+        titleLayout._menuBtns.push({ key: menuKeys[i], x: bx, y: by, w: btnSize, h: btnSize });
       }
+      // совместимость со старым кликом Start
+      titleLayout._btnX = titleLayout._menuBtns[0].x;
+      titleLayout._btnY = titleLayout._menuBtns[0].y;
+      titleLayout._btnW = btnSize;
+      titleLayout._btnH = btnSize;
 
       // Кнопка музыки на титуле
       drawHUDButtons();
+
+      // Панели Level / Missions / Settings
+      if (titleMenu) drawTitleMenuPanel();
 
       // Окно полного описания способностей
       if (charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) {
@@ -2538,6 +2772,251 @@
       }
       if (line) lines.push(line);
       return lines;
+    }
+
+    function drawTitleMenuPanel() {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      const pw = WIDTH - 28;
+      const ph = HEIGHT - 100;
+      const px = 14;
+      const py = 50;
+      ctx.fillStyle = 'rgba(22, 24, 40, 0.97)';
+      roundRect(px, py, pw, ph, 18);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1.5;
+      roundRect(px, py, pw, ph, 18);
+      ctx.stroke();
+
+      const titles = { levels: 'Уровни', missions: 'Задания', settings: 'Настройки' };
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 22px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(titles[titleMenu] || '', WIDTH / 2, py + 32);
+
+      // Закрыть
+      const cx = px + pw - 28;
+      const cy = py + 28;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('×', cx, cy + 1);
+      ctx.textBaseline = 'alphabetic';
+      titleLayout._menuClose = { x: cx - 16, y: cy - 16, w: 32, h: 32 };
+      titleLayout._menuHits = [];
+
+      if (titleMenu === 'levels') {
+        // 5 колонок × 10 рядов = 50 на экран
+        const perPage = 50;
+        const start = levelPage * perPage + 1;
+        const end = Math.min(100, start + perPage - 1);
+        const cols = 5;
+        const cellW = 62;
+        const cellH = 44;
+        const gap = 5;
+        const gridW = cols * cellW + (cols - 1) * gap;
+        const gx0 = (WIDTH - gridW) / 2;
+        let gy = py + 46;
+        for (let n = start; n <= end; n++) {
+          const i = n - start;
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const gx = gx0 + col * (cellW + gap);
+          const gy2 = gy + row * (cellH + gap);
+          const unlocked = isLevelUnlocked(n);
+          const done = !!levelsCompleted[n];
+          ctx.fillStyle = done ? 'rgba(78,205,196,0.35)' : (unlocked ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.35)');
+          roundRect(gx, gy2, cellW, cellH, 8);
+          ctx.fill();
+          ctx.fillStyle = unlocked ? '#fff' : '#777';
+          ctx.font = 'bold 13px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(n), gx + cellW / 2, gy2 + 13);
+          ctx.font = '9px Segoe UI';
+          ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.65)' : '#555';
+          ctx.fillText(getLevelTarget(n) + 'm', gx + cellW / 2, gy2 + 27);
+          ctx.textBaseline = 'alphabetic';
+          if (unlocked) titleLayout._menuHits.push({ type: 'level', n, x: gx, y: gy2, w: cellW, h: cellH });
+        }
+        const pages = Math.ceil(100 / perPage);
+        ctx.font = 'bold 14px Segoe UI';
+        ctx.fillStyle = levelPage > 0 ? '#4ecdc4' : '#555';
+        ctx.textAlign = 'left';
+        ctx.fillText('‹ Назад', px + 16, py + ph - 20);
+        titleLayout._menuHits.push({ type: 'levelPrev', x: px + 10, y: py + ph - 40, w: 80, h: 30 });
+        ctx.fillStyle = levelPage < pages - 1 ? '#4ecdc4' : '#555';
+        ctx.textAlign = 'right';
+        ctx.fillText('Далее ›', px + pw - 16, py + ph - 20);
+        titleLayout._menuHits.push({ type: 'levelNext', x: px + pw - 90, y: py + ph - 40, w: 80, h: 30 });
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px Segoe UI';
+        ctx.fillText((levelPage + 1) + ' / ' + pages, WIDTH / 2, py + ph - 20);
+      }
+
+      if (titleMenu === 'missions') {
+        // Сортировка: готовые к забору → в процессе → выполненные
+        const sorted = MISSIONS.map(m => {
+          const done = !!missionsDone[m.id];
+          const progress = getMissionProgress(m);
+          const ready = !done && progress >= m.need;
+          let order = 1;
+          if (ready) order = 0;
+          else if (done) order = 2;
+          return { m, done, progress, ready, order };
+        }).sort((a, b) => a.order - b.order || a.m.id - b.m.id);
+
+        const perPage = 8;
+        const start = missionPage * perPage;
+        const end = Math.min(sorted.length, start + perPage);
+        let my = py + 48;
+        const rowH = 52;
+        for (let i = start; i < end; i++) {
+          const { m, done, progress, ready } = sorted[i];
+          ctx.fillStyle = done ? 'rgba(78,205,196,0.18)' : (ready ? 'rgba(255,200,60,0.12)' : 'rgba(255,255,255,0.08)');
+          roundRect(px + 10, my, pw - 20, rowH - 4, 10);
+          ctx.fill();
+          ctx.fillStyle = done ? 'rgba(255,255,255,0.55)' : '#fff';
+          ctx.font = 'bold 12px Segoe UI';
+          ctx.textAlign = 'left';
+          // Обрезка длинного текста
+          let title = m.id + '. ' + m.text;
+          if (ctx.measureText(title).width > pw - 120) {
+            while (title.length > 8 && ctx.measureText(title + '…').width > pw - 120) title = title.slice(0, -1);
+            title += '…';
+          }
+          ctx.fillText(title, px + 20, my + 18);
+          ctx.font = '11px Segoe UI';
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillText(Math.min(progress, m.need) + '/' + m.need + ' · ×' + m.reward, px + 20, my + 36);
+          if (done) {
+            ctx.fillStyle = '#4ecdc4';
+            ctx.font = 'bold 11px Segoe UI';
+            ctx.textAlign = 'right';
+            ctx.fillText('✓', px + pw - 22, my + 28);
+          } else if (ready) {
+            ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
+            roundRect(px + pw - 96, my + 12, 74, 26, 8);
+            ctx.fill();
+            ctx.fillStyle = '#1a1a2e';
+            ctx.font = 'bold 11px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Забрать', px + pw - 59, my + 25);
+            ctx.textBaseline = 'alphabetic';
+            titleLayout._menuHits.push({ type: 'claim', id: m.id, reward: m.reward, x: px + pw - 96, y: my + 12, w: 74, h: 26 });
+          }
+          my += rowH;
+        }
+
+        // Кнопка «Забрать все» внизу
+        const claimable = sorted.filter(s => s.ready);
+        const claimAllY = py + ph - 58;
+        if (claimable.length > 0) {
+          ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
+          roundRect(px + 40, claimAllY, pw - 80, 34, 12);
+          ctx.fill();
+          ctx.fillStyle = '#1a1a2e';
+          ctx.font = 'bold 14px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const sum = claimable.reduce((s, c) => s + c.m.reward, 0);
+          ctx.fillText('Забрать все (' + claimable.length + ') · ×' + sum, WIDTH / 2, claimAllY + 17);
+          ctx.textBaseline = 'alphabetic';
+          titleLayout._menuHits.push({ type: 'claimAll', x: px + 40, y: claimAllY, w: pw - 80, h: 34 });
+        }
+
+        const misPages = Math.ceil(sorted.length / perPage);
+        ctx.font = 'bold 13px Segoe UI';
+        ctx.fillStyle = missionPage > 0 ? '#4ecdc4' : '#555';
+        ctx.textAlign = 'left';
+        ctx.fillText('‹', px + 16, py + ph - 16);
+        titleLayout._menuHits.push({ type: 'misPrev', x: px + 8, y: py + ph - 32, w: 40, h: 28 });
+        ctx.fillStyle = missionPage < misPages - 1 ? '#4ecdc4' : '#555';
+        ctx.textAlign = 'right';
+        ctx.fillText('›', px + pw - 16, py + ph - 16);
+        titleLayout._menuHits.push({ type: 'misNext', x: px + pw - 48, y: py + ph - 32, w: 40, h: 28 });
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = '11px Segoe UI';
+        ctx.fillText((missionPage + 1) + '/' + misPages, WIDTH / 2, py + ph - 16);
+      }
+
+      if (titleMenu === 'settings') {
+        // Музыка вкл
+        let sy = py + 70;
+        ctx.fillStyle = '#fff';
+        ctx.font = '15px Segoe UI';
+        ctx.textAlign = 'left';
+        ctx.fillText('Музыка', px + 28, sy);
+        drawToggle(px + pw - 70, sy - 12, musicEnabled);
+        titleLayout._menuHits.push({ type: 'togMusic', x: px + pw - 80, y: sy - 18, w: 50, h: 28 });
+
+        sy += 50;
+        ctx.fillText('Громкость музыки', px + 28, sy);
+        drawSlider(px + 28, sy + 14, pw - 56, musicVol);
+        titleLayout._menuHits.push({ type: 'slMusic', x: px + 28, y: sy + 6, w: pw - 56, h: 28 });
+
+        sy += 60;
+        ctx.fillText('Громкость эффектов', px + 28, sy);
+        drawSlider(px + 28, sy + 14, pw - 56, sfxVol);
+        titleLayout._menuHits.push({ type: 'slSfx', x: px + 28, y: sy + 6, w: pw - 56, h: 28 });
+
+        sy += 55;
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px Segoe UI';
+        ctx.fillText('Коды: monstergold · monsterall · monsterdell', px + 28, sy);
+      }
+    }
+
+    function drawToggle(x, y, on) {
+      ctx.fillStyle = on ? '#4ecdc4' : 'rgba(255,255,255,0.2)';
+      roundRect(x, y, 40, 22, 11);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(on ? x + 28 : x + 12, y + 11, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawSlider(x, y, w, val) {
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRect(x, y + 6, w, 8, 4);
+      ctx.fill();
+      ctx.fillStyle = '#4ecdc4';
+      roundRect(x, y + 6, w * Math.max(0, Math.min(1, val)), 8, 4);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x + w * Math.max(0, Math.min(1, val)), y + 10, 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Лучший runCoins за забег (для миссий)
+    let bestRunCoins = 0;
+    try { bestRunCoins = parseInt(localStorage.getItem('monsterJumpBestRunCoins') || '0', 10) || 0; } catch (e) {}
+
+    function getMissionProgress(m) {
+      if (m.type === 'height') return bestScore;
+      if (m.type === 'coins_total') return totalCoins;
+      if (m.type === 'coins_run') return bestRunCoins;
+      if (m.type === 'plays') return missionStats.plays || 0;
+      if (m.type === 'use_bonus1') return missionStats.use_bonus1 || 0;
+      if (m.type === 'use_bonus2') return missionStats.use_bonus2 || 0;
+      if (m.type === 'use_bonus3') return missionStats.use_bonus3 || 0;
+      if (m.type === 'level') {
+        let c = 0;
+        for (let i = 1; i <= 100; i++) if (levelsCompleted[i]) c++;
+        return c;
+      }
+      return 0;
     }
 
     function drawLoadingScreen() {
@@ -2678,6 +3157,11 @@
         pauseMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
       }
 
+      // Экран «Уровень пройден»
+      if (gameState === 'levelwin') {
+        drawLevelWinScreen();
+      }
+
       // Эффект проигрыша — затемнение + красная вспышка (без текста)
       if (gameState === 'dying') {
         const t = 1 - dyingTimer / 90;
@@ -2695,6 +3179,83 @@
       vignette.addColorStop(1, 'rgba(0,0,0,0.15)');
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    function drawLevelWinScreen() {
+      // Золотая вспышка в начале
+      const t = Math.min(1, levelWinTimer / 30);
+      if (levelWinTimer < 20) {
+        ctx.fillStyle = `rgba(255, 220, 80, ${(20 - levelWinTimer) / 40})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+      ctx.fillStyle = `rgba(8, 12, 28, ${0.55 + t * 0.2})`;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      const panelW = 300;
+      const panelH = 260;
+      const panelX = (WIDTH - panelW) / 2;
+      const panelY = (HEIGHT - panelH) / 2 - 20;
+
+      // Пульс рамки
+      const pulse = 0.5 + 0.5 * Math.sin(levelWinTimer * 0.12);
+      ctx.save();
+      ctx.shadowColor = `rgba(78, 205, 196, ${0.35 + pulse * 0.35})`;
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = 'rgba(26, 28, 50, 0.96)';
+      roundRect(panelX, panelY, panelW, panelH, 22);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = `rgba(78, 205, 196, ${0.5 + pulse * 0.4})`;
+      ctx.lineWidth = 2.5;
+      roundRect(panelX, panelY, panelW, panelH, 22);
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 26px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Уровень пройден!', WIDTH / 2, panelY + 48);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 40px Segoe UI, Arial';
+      ctx.fillText(String(levelWinLevel), WIDTH / 2, panelY + 100);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '14px Segoe UI, Arial';
+      ctx.fillText('+' + (50 + levelWinLevel) + ' монет · ' + score + ' m', WIDTH / 2, panelY + 130);
+
+      // Кнопки Home | Next
+      const btnS = 64;
+      const gap = 28;
+      const homeX = WIDTH / 2 - btnS - gap / 2;
+      const nextX = WIDTH / 2 + gap / 2;
+      const btnY = panelY + 160;
+
+      function drawWinBtn(img, x, y, label) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        roundRect(x, y, btnS, btnS, 14);
+        ctx.fill();
+        if (isImageReady(img)) {
+          drawSprite(img, x + btnS / 2, y + btnS / 2, btnS - 12, btnS - 12);
+        } else {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, x + btnS / 2, y + btnS / 2);
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+      drawWinBtn(homeImg, homeX, btnY, 'HOME');
+      drawWinBtn(nextImg, nextX, btnY, 'NEXT');
+
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '11px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.fillText('Домой', homeX + btnS / 2, btnY + btnS + 16);
+      ctx.fillText(levelWinLevel >= 100 ? 'Финиш' : 'Далее', nextX + btnS / 2, btnY + btnS + 16);
+
+      levelWinBtns.home = { x: homeX, y: btnY, w: btnS, h: btnS };
+      levelWinBtns.next = { x: nextX, y: btnY, w: btnS, h: btnS };
     }
 
     function drawScoreHUD() {
@@ -2907,6 +3468,74 @@
       // Любой клик на титуле — пробуем запустить музыку
       startMusic();
 
+      // Меню levels/missions/settings
+      if (titleMenu) {
+        const cl = titleLayout._menuClose;
+        if (cl && mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) {
+          titleMenu = null;
+          return;
+        }
+        for (const h of (titleLayout._menuHits || [])) {
+          if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
+            if (h.type === 'level' && isLevelUnlocked(h.n)) {
+              currentLevel = h.n;
+              levelTarget = getLevelTarget(h.n);
+              titleMenu = null;
+              if (!unlockedChars[selectedCharacter]) selectedCharacter = 0;
+              startGame();
+              return;
+            }
+            if (h.type === 'levelPrev' && levelPage > 0) levelPage--;
+            if (h.type === 'levelNext' && levelPage < Math.ceil(100 / 50) - 1) levelPage++;
+            if (h.type === 'misPrev' && missionPage > 0) missionPage--;
+            if (h.type === 'misNext' && (missionPage + 1) * 8 < MISSIONS.length) missionPage++;
+            if (h.type === 'claim' && !missionsDone[h.id]) {
+              missionsDone[h.id] = true;
+              totalCoins += h.reward;
+              saveProgress();
+              saveMetaProgress();
+              secretFlashTimer = 60;
+              secretFlashText = '+' + h.reward;
+            }
+            if (h.type === 'claimAll') {
+              let sum = 0;
+              let cnt = 0;
+              for (const m of MISSIONS) {
+                if (missionsDone[m.id]) continue;
+                if (getMissionProgress(m) >= m.need) {
+                  missionsDone[m.id] = true;
+                  sum += m.reward;
+                  cnt++;
+                }
+              }
+              if (cnt > 0) {
+                totalCoins += sum;
+                saveProgress();
+                saveMetaProgress();
+                secretFlashTimer = 70;
+                secretFlashText = '+' + sum;
+                coinShake = 14;
+              }
+            }
+            if (h.type === 'togMusic') {
+              toggleMusic();
+              saveMetaProgress();
+            }
+            if (h.type === 'slMusic') {
+              musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w));
+              music.volume = musicVol;
+              saveMetaProgress();
+            }
+            if (h.type === 'slSfx') {
+              sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w));
+              saveMetaProgress();
+            }
+            return;
+          }
+        }
+        return;
+      }
+
       // Окно описания: закрытие
       if (charInfoPopup >= 0) {
         const cl = titleLayout._infoClose;
@@ -2915,12 +3544,32 @@
           charInfoPopup = -1;
           return;
         }
-        // Клик вне панели — закрыть
         if (panel && !(mx >= panel.x && mx <= panel.x + panel.w && my >= panel.y && my <= panel.y + panel.h)) {
           charInfoPopup = -1;
           return;
         }
-        return; // клик внутри панели — ничего
+        return;
+      }
+
+      // 4 кнопки меню
+      if (titleLayout._menuBtns) {
+        for (const b of titleLayout._menuBtns) {
+          if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+            if (b.key === 'start') {
+              currentLevel = 0;
+              levelTarget = 0;
+              if (!unlockedChars[selectedCharacter]) selectedCharacter = 0;
+              startGame();
+            } else if (b.key === 'levels') {
+              titleMenu = 'levels';
+            } else if (b.key === 'missions') {
+              titleMenu = 'missions';
+            } else if (b.key === 'settings') {
+              titleMenu = 'settings';
+            }
+            return;
+          }
+        }
       }
 
       // Кнопки «!» у персонажей
@@ -2987,17 +3636,7 @@
         }
       }
 
-      // Клик по кнопке Старт
-      const bx = titleLayout._btnX || (WIDTH - titleLayout.startBtnW) / 2;
-      const by = titleLayout._btnY || titleLayout.startBtnY;
-      const bw = titleLayout._btnW || titleLayout.startBtnW;
-      const bh = titleLayout._btnH || titleLayout.startBtnH;
-
-      if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
-        if (!unlockedChars[selectedCharacter]) selectedCharacter = 0;
-        startGame();
       }
-    }
 
     function handleGameClick(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
@@ -3005,6 +3644,35 @@
       const scaleY = HEIGHT / rect.height;
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
+
+      // Меню победы на уровне
+      if (gameState === 'levelwin') {
+        const h = levelWinBtns.home;
+        const n = levelWinBtns.next;
+        if (h && mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
+          currentLevel = 0;
+          levelTarget = 0;
+          levelWinLevel = 0;
+          goToMenu();
+          return;
+        }
+        if (n && mx >= n.x && mx <= n.x + n.w && my >= n.y && my <= n.y + n.h) {
+          if (levelWinLevel >= 100) {
+            currentLevel = 0;
+            levelTarget = 0;
+            levelWinLevel = 0;
+            goToMenu();
+            return;
+          }
+          const next = levelWinLevel + 1;
+          currentLevel = next;
+          levelTarget = getLevelTarget(next);
+          levelWinLevel = 0;
+          startGame();
+          return;
+        }
+        return;
+      }
 
       if (gameState === 'playing') {
         // Магазин бонусов
@@ -3060,7 +3728,7 @@
     canvas.addEventListener('click', e => {
       if (gameState === 'title') {
         handleTitleClick(e.clientX, e.clientY);
-      } else if (gameState === 'playing') {
+      } else if (gameState === 'playing' || gameState === 'levelwin') {
         handleGameClick(e.clientX, e.clientY);
       }
     });
@@ -3071,7 +3739,7 @@
       if (gameState === 'title') {
         e.preventDefault();
         handleTitleClick(t.clientX, t.clientY);
-      } else if (gameState === 'playing') {
+      } else if (gameState === 'playing' || gameState === 'levelwin') {
         handleGameClick(t.clientX, t.clientY);
       }
     }, { passive: false });
@@ -3101,7 +3769,7 @@
       accumulator += frameTime;
 
       while (accumulator >= FIXED_DT) {
-        if (gameState === 'playing' || gameState === 'dying') {
+        if (gameState === 'playing' || gameState === 'dying' || gameState === 'levelwin') {
           update();
         }
         accumulator -= FIXED_DT;
