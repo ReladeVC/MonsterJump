@@ -241,6 +241,8 @@
       gold:            'assets/gold.png',
       allgold:         'assets/allgold.png',
       crystal:         'assets/crystal.png',
+      scroll:          'assets/Scroll.png',
+      roll:            'assets/Roll.png',
       bonus2:          'assets/bonus2.png',
       bonus2_1:        'assets/bonus2_1.png',
       bonus3:          'assets/bonus3.png',
@@ -291,6 +293,8 @@
     let goldImg = null;
     let allgoldImg = null;
     let crystalImg = null;
+    let scrollImg = null;
+    let rollImg = null;
     let pauseImg = null;
     let soundImg = null;
 
@@ -319,8 +323,8 @@
       },
       {
         name: 'Luma',
-        price: 140000, unlock: 'coins', label: 'Медл. ×2 монеты',
-        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2.'
+        price: 140000, unlock: 'coins', label: 'Стоять · прыжок',
+        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше.'
       },
       {
         name: 'Hex',
@@ -359,6 +363,10 @@
     // 4-й персонаж: прыгает по разрушающимся и не ломает их
     function hasSafeBreak() {
       return selectedCharacter === 3;
+    }
+    // 5-й персонаж (Luma): может стоять на платформах
+    function hasStandAbility() {
+      return selectedCharacter === 4; // только 5-й (Luma)
     }
 
     const SECRET_CODES = {
@@ -407,10 +415,12 @@
 
     let totalCoins = 0;
     let totalCrystals = 0;
+    let totalRolls = 0; // рубины Roll.png
     let unlockedChars = [true, false, false, false, false, false];
     try {
       totalCoins = parseInt(localStorage.getItem('monsterJumpCoins') || '0', 10) || 0;
       totalCrystals = parseInt(localStorage.getItem('monsterJumpCrystals') || '0', 10) || 0;
+      totalRolls = parseInt(localStorage.getItem('monsterJumpRolls') || '0', 10) || 0;
       invBonus1 = parseInt(localStorage.getItem('monsterJumpBonus1') || '0', 10) || 0;
       invBonus2 = parseInt(localStorage.getItem('monsterJumpBonus2') || '0', 10) || 0;
       invBonus3 = parseInt(localStorage.getItem('monsterJumpBonus3') || '0', 10) || 0;
@@ -428,6 +438,7 @@
       try {
         localStorage.setItem('monsterJumpCoins', String(totalCoins));
         localStorage.setItem('monsterJumpCrystals', String(totalCrystals));
+        localStorage.setItem('monsterJumpRolls', String(totalRolls));
         localStorage.setItem('monsterJumpUnlocks', JSON.stringify(unlockedChars));
         localStorage.setItem('monsterJumpBest', String(bestScore));
         localStorage.setItem('monsterJumpBonus1', String(invBonus1));
@@ -544,6 +555,12 @@
     crystalImg        = loadImageWithFallback([
       'assets/crystal.png', 'assets/Crystal.png', 'assets/CRYSTAL.png'
     ]);
+    scrollImg         = loadImageWithFallback([
+      'assets/Scroll.png', 'assets/scroll.png', 'assets/SCROLL.png'
+    ]);
+    rollImg           = loadImageWithFallback([
+      'assets/Roll.png', 'assets/roll.png', 'assets/ROLL.png'
+    ]);
     pauseImg          = loadImageWithFallback([
       'assets/pause.png', 'assets/Pause.png', 'assets/PAUSE.png'
     ]);
@@ -652,7 +669,8 @@
     } catch (e) { bestScore = 0; }
 
     let gameState = 'loading'; // 'loading' | 'title' | 'playing' | 'gameover' | 'dying'
-    let keys = { left: false, right: false };
+    let keys = { left: false, right: false, up: false, down: false };
+    let touchY = null;
     let touchX = null;
 
     // Бонус-эффект
@@ -688,6 +706,11 @@
     let levelScrollMax = 0;
     let levelDrag = null; // { y, scroll }
     let levelDidScroll = false;
+    let missionScrollY = 0;
+    let missionScrollV = 0;
+    let missionScrollMax = 0;
+    let missionDrag = null;
+    let missionDidScroll = false;
     let currentLevel = 0; // 0 = endless, 1..100 = уровень
     let levelTarget = 0;
     let levelWinLevel = 0; // какой уровень только что пройден
@@ -1410,6 +1433,8 @@
     window.addEventListener('keydown', e => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.down = true;
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = true;
       if (e.code === 'Space' && gameState === 'gameover') retryGame();
 
       // Секретные коды: monstergold / monsterall / monsterdell
@@ -1436,6 +1461,7 @@
           // Сброс всех покупок и прогресса
           totalCoins = 0;
           totalCrystals = 0;
+          totalRolls = 0;
           unlockedChars = [true, false, false, false, false, false];
           invBonus1 = 0;
           invBonus2 = 0;
@@ -1463,6 +1489,8 @@
     window.addEventListener('keyup', e => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.down = false;
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = false;
     });
 
     function canvasToGame(clientX, clientY) {
@@ -1476,17 +1504,26 @@
     // Тач — свайп в игре + скролл уровней на титуле
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
-      if (gameState === 'title' && titleMenu === 'levels') {
+      if (gameState === 'title' && (titleMenu === 'levels' || titleMenu === 'missions')) {
         const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
-        const clip = titleLayout._levelClip;
-        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
-          levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
-          levelScrollV = 0;
+        if (titleMenu === 'levels') {
+          const clip = titleLayout._levelClip;
+          if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+            levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
+            levelScrollV = 0;
+          }
+        } else {
+          const clip = titleLayout._missionClip;
+          if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+            missionDrag = { y: p.y, scroll: missionScrollY, lastY: p.y, moved: false };
+            missionScrollV = 0;
+          }
         }
         return;
       }
       if (gameState !== 'playing' || isPaused) return;
       touchX = e.touches[0].clientX;
+      touchY = e.touches[0].clientY;
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
@@ -1499,10 +1536,31 @@
         levelDrag.lastY = p.y;
         return;
       }
+      if (gameState === 'title' && titleMenu === 'missions' && missionDrag) {
+        const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+        const dy = p.y - missionDrag.y;
+        if (Math.abs(dy) > 4) missionDrag.moved = true;
+        missionScrollY = Math.max(0, Math.min(missionScrollMax, missionDrag.scroll - dy));
+        missionScrollV = missionDrag.lastY - p.y;
+        missionDrag.lastY = p.y;
+        return;
+      }
       if (gameState !== 'playing' || isPaused || touchX === null) return;
       const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
       const dx = currentX - touchX;
-      if (dx < -18) {
+      const dy = touchY != null ? currentY - touchY : 0;
+      // Вертикальный свайп — для способности Luma
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 16) {
+        if (dy > 0) {
+          keys.down = true;
+          keys.up = false;
+        } else {
+          keys.up = true;
+          keys.down = false;
+        }
+        touchY = currentY;
+      } else if (dx < -18) {
         keys.left = true;
         keys.right = false;
         touchX = currentX;
@@ -1520,46 +1578,79 @@
         levelDidScroll = !!levelDrag.moved;
         levelDrag = null;
       }
+      if (missionDrag) {
+        missionDidScroll = !!missionDrag.moved;
+        missionDrag = null;
+      }
       touchX = null;
+      touchY = null;
       setTimeout(() => {
         if (touchX === null) {
           keys.left = false;
           keys.right = false;
+          keys.up = false;
+          keys.down = false;
         }
       }, 90);
     });
 
     // Мышь — скролл уровней
     canvas.addEventListener('mousedown', e => {
-      if (gameState === 'title' && titleMenu === 'levels') {
-        const p = canvasToGame(e.clientX, e.clientY);
+      if (gameState !== 'title') return;
+      const p = canvasToGame(e.clientX, e.clientY);
+      if (titleMenu === 'levels') {
         const clip = titleLayout._levelClip;
         if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
           levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
           levelScrollV = 0;
         }
+      } else if (titleMenu === 'missions') {
+        const clip = titleLayout._missionClip;
+        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+          missionDrag = { y: p.y, scroll: missionScrollY, lastY: p.y, moved: false };
+          missionScrollV = 0;
+        }
       }
     });
     window.addEventListener('mousemove', e => {
-      if (!levelDrag || titleMenu !== 'levels') return;
-      const p = canvasToGame(e.clientX, e.clientY);
-      const dy = p.y - levelDrag.y;
-      if (Math.abs(dy) > 4) levelDrag.moved = true;
-      levelScrollY = Math.max(0, Math.min(levelScrollMax, levelDrag.scroll - dy));
-      levelScrollV = levelDrag.lastY - p.y;
-      levelDrag.lastY = p.y;
+      if (levelDrag && titleMenu === 'levels') {
+        const p = canvasToGame(e.clientX, e.clientY);
+        const dy = p.y - levelDrag.y;
+        if (Math.abs(dy) > 4) levelDrag.moved = true;
+        levelScrollY = Math.max(0, Math.min(levelScrollMax, levelDrag.scroll - dy));
+        levelScrollV = levelDrag.lastY - p.y;
+        levelDrag.lastY = p.y;
+      }
+      if (missionDrag && titleMenu === 'missions') {
+        const p = canvasToGame(e.clientX, e.clientY);
+        const dy = p.y - missionDrag.y;
+        if (Math.abs(dy) > 4) missionDrag.moved = true;
+        missionScrollY = Math.max(0, Math.min(missionScrollMax, missionDrag.scroll - dy));
+        missionScrollV = missionDrag.lastY - p.y;
+        missionDrag.lastY = p.y;
+      }
     });
     window.addEventListener('mouseup', () => {
       if (levelDrag) {
         levelDidScroll = !!levelDrag.moved;
         levelDrag = null;
       }
+      if (missionDrag) {
+        missionDidScroll = !!missionDrag.moved;
+        missionDrag = null;
+      }
     });
     canvas.addEventListener('wheel', e => {
-      if (gameState !== 'title' || titleMenu !== 'levels') return;
-      e.preventDefault();
-      levelScrollY = Math.max(0, Math.min(levelScrollMax, levelScrollY + e.deltaY * 0.5));
-      levelScrollV = 0;
+      if (gameState !== 'title') return;
+      if (titleMenu === 'levels') {
+        e.preventDefault();
+        levelScrollY = Math.max(0, Math.min(levelScrollMax, levelScrollY + e.deltaY * 0.5));
+        levelScrollV = 0;
+      } else if (titleMenu === 'missions') {
+        e.preventDefault();
+        missionScrollY = Math.max(0, Math.min(missionScrollMax, missionScrollY + e.deltaY * 0.5));
+        missionScrollV = 0;
+      }
     }, { passive: false });
 
     // Мышь (для удобства на ПК)
@@ -1854,19 +1945,25 @@
 
             player.y = p.y - player.height;
             const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
-            player.vy = JUMP_FORCE * jumpMul;
             onPlatform = true;
-            spawnPlatformDust(player.x + player.width / 2, p.y);
-
-            if (p.type === 'spring') {
-              player.vy = JUMP_FORCE * 1.7 * jumpMul;
-              playSpringSound();
+            // Luma (5): вниз — стоять, вверх / обычный — прыгать
+            const wantStand = hasStandAbility() && keys.down && !keys.up && p.type !== 'spring';
+            if (wantStand) {
+              player.vy = 0;
+              // пока стоит — не ломаем платформу
             } else {
-              playJumpSound();
-            }
-            if (p.type === 'breaking' && !hasSafeBreak()) {
-              p.broken = true;
-              p.breakTimer = 0;
+              player.vy = JUMP_FORCE * jumpMul;
+              spawnPlatformDust(player.x + player.width / 2, p.y);
+              if (p.type === 'spring') {
+                player.vy = JUMP_FORCE * 1.7 * jumpMul;
+                playSpringSound();
+              } else {
+                playJumpSound();
+              }
+              if (p.type === 'breaking' && !hasSafeBreak()) {
+                p.broken = true;
+                p.breakTimer = 0;
+              }
             }
             break;
           }
@@ -2666,39 +2763,41 @@
       if (secretFlashTimer > 0) secretFlashTimer--;
       for (let k = 1; k <= 5; k++) if (charShake[k] > 0) charShake[k]--;
 
-      // Баланс монет — как в игре (y=10, h=48, в линии со sound)
+      // Монеты / кристаллы / рубины — по центру относительно краёв
       const coinOx = coinShake > 0 ? Math.sin(coinShake * 1.8) * 5 : 0;
       const coinOy = coinShake > 0 ? Math.cos(coinShake * 2.2) * 3 : 0;
       const tTop = 10;
       const tBarH = 48;
-      const tLeft = 2;
       const tIcon = 30;
-      const coinPanelW = secretFlashTimer > 0 ? 160 : 118;
-      ctx.fillStyle = secretFlashTimer > 0
-        ? 'rgba(255, 215, 0, 0.45)'
-        : 'rgba(0,0,0,0.28)';
-      roundRect(tLeft + coinOx, tTop + coinOy, coinPanelW, tBarH, 8);
+      const panelW = 118;
+      const panelGap = 8;
+      const totalRowW = panelW * 3 + panelGap * 2;
+      const tLeft = (WIDTH - totalRowW) / 2;
+      const coinX = tLeft + coinOx;
+      const cryX = tLeft + panelW + panelGap + coinOx;
+      const rollX = tLeft + (panelW + panelGap) * 2 + coinOx;
+
+      // Монеты
+      ctx.fillStyle = secretFlashTimer > 0 ? 'rgba(255, 215, 0, 0.45)' : 'rgba(0,0,0,0.28)';
+      roundRect(coinX, tTop + coinOy, panelW, tBarH, 8);
       ctx.fill();
       const titleCoinIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
-      drawSprite(titleCoinIcon, tLeft + 6 + tIcon / 2 + coinOx, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
+      drawSprite(titleCoinIcon, coinX + 6 + tIcon / 2, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
       ctx.fillStyle = secretFlashTimer > 0 ? '#fff' : '#FFE082';
       ctx.font = 'bold 16px Segoe UI, Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, tLeft + tIcon + 12 + coinOx, tTop + tBarH / 2 + coinOy);
-      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('× ' + totalCoins, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy);
       if (secretFlashTimer > 0) {
         ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 12px Segoe UI';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(secretFlashText, tLeft + tIcon + 12 + coinOx + 70, tTop + tBarH / 2 + coinOy);
-        ctx.textBaseline = 'alphabetic';
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText(secretFlashText, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy + 14);
       }
+      ctx.textBaseline = 'alphabetic';
 
-      // Кристаллы — справа от монет, тот же формат
-      const cryX = tLeft + coinPanelW + 10 + coinOx;
+      // Кристаллы
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      roundRect(cryX, tTop + coinOy, 118, tBarH, 8);
+      roundRect(cryX, tTop + coinOy, panelW, tBarH, 8);
       ctx.fill();
       if (isImageReady(crystalImg)) {
         drawSprite(crystalImg, cryX + 6 + tIcon / 2, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
@@ -2717,6 +2816,25 @@
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText('× ' + totalCrystals, cryX + tIcon + 12, tTop + tBarH / 2 + coinOy);
+      ctx.textBaseline = 'alphabetic';
+
+      // Рубины
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      roundRect(rollX, tTop + coinOy, panelW, tBarH, 8);
+      ctx.fill();
+      if (isImageReady(rollImg)) {
+        drawSprite(rollImg, rollX + 6 + tIcon / 2, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
+      } else {
+        ctx.fillStyle = '#E57373';
+        ctx.beginPath();
+        ctx.arc(rollX + 20, tTop + tBarH / 2 + coinOy, 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#FFCDD2';
+      ctx.font = 'bold 16px Segoe UI, Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('× ' + totalRolls, rollX + tIcon + 12, tTop + tBarH / 2 + coinOy);
       ctx.textBaseline = 'alphabetic';
 
       // Подпись — выше
@@ -3120,7 +3238,7 @@
       }
 
       if (titleMenu === 'missions') {
-        // Сортировка: готовые к забору → в процессе → выполненные
+        // Сортировка: готовые к забору → в процессе → выполненные внизу
         const sorted = MISSIONS.map(m => {
           const done = !!missionsDone[m.id];
           const progress = getMissionProgress(m);
@@ -3128,83 +3246,129 @@
           let order = 1;
           if (ready) order = 0;
           else if (done) order = 2;
+          else order = 1;
           return { m, done, progress, ready, order };
         }).sort((a, b) => a.order - b.order || a.m.id - b.m.id);
 
-        const perPage = 8;
-        const start = missionPage * perPage;
-        const end = Math.min(sorted.length, start + perPage);
-        let my = py + 48;
-        const rowH = 52;
-        for (let i = start; i < end; i++) {
+        const rowH = 88;
+        const scrollW = pw - 24;
+        const scrollH = rowH - 6;
+        const viewTop = py + 48;
+        const viewH = ph - 100;
+        const contentH = sorted.length * rowH;
+        missionScrollMax = Math.max(0, contentH - viewH);
+        missionScrollY = Math.max(0, Math.min(missionScrollMax, missionScrollY));
+        if (!missionDrag && Math.abs(missionScrollV) > 0.05) {
+          missionScrollY += missionScrollV;
+          missionScrollV *= 0.92;
+          if (missionScrollY < 0) { missionScrollY = 0; missionScrollV = 0; }
+          if (missionScrollY > missionScrollMax) { missionScrollY = missionScrollMax; missionScrollV = 0; }
+        }
+        titleLayout._missionClip = { x: px + 4, y: viewTop, w: pw - 8, h: viewH };
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px + 4, viewTop, pw - 8, viewH);
+        ctx.clip();
+
+        for (let i = 0; i < sorted.length; i++) {
           const { m, done, progress, ready } = sorted[i];
-          ctx.fillStyle = done ? 'rgba(78,205,196,0.18)' : (ready ? 'rgba(255,200,60,0.12)' : 'rgba(255,255,255,0.08)');
-          roundRect(px + 10, my, pw - 20, rowH - 4, 10);
-          ctx.fill();
-          ctx.fillStyle = done ? 'rgba(255,255,255,0.55)' : '#fff';
-          ctx.font = 'bold 12px Segoe UI';
-          ctx.textAlign = 'left';
-          // Обрезка длинного текста
-          let title = m.id + '. ' + m.text;
-          if (ctx.measureText(title).width > pw - 120) {
-            while (title.length > 8 && ctx.measureText(title + '…').width > pw - 120) title = title.slice(0, -1);
+          const sx0 = px + 12;
+          const my = viewTop + i * rowH - missionScrollY;
+          if (my + scrollH < viewTop - 4 || my > viewTop + viewH + 4) continue;
+          const midX = sx0 + scrollW / 2;
+
+          if (isImageReady(scrollImg)) {
+            ctx.save();
+            if (done) ctx.globalAlpha = 0.7;
+            ctx.drawImage(scrollImg, sx0, my, scrollW, scrollH);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = done ? 'rgba(78,205,196,0.18)' : 'rgba(255,255,255,0.1)';
+            roundRect(sx0, my, scrollW, scrollH, 12);
+            ctx.fill();
+          }
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = done ? 'rgba(40,30,20,0.65)' : 'rgba(40,25,10,0.85)';
+          ctx.font = 'bold 13px Segoe UI';
+          let title = m.text;
+          const maxTw = scrollW - 100;
+          if (ctx.measureText(title).width > maxTw) {
+            while (title.length > 8 && ctx.measureText(title + '…').width > maxTw) title = title.slice(0, -1);
             title += '…';
           }
-          ctx.fillText(title, px + 20, my + 18);
-          ctx.font = '11px Segoe UI';
-          ctx.fillStyle = 'rgba(255,255,255,0.6)';
-          ctx.fillText(Math.min(progress, m.need) + '/' + m.need + ' · ×' + m.reward, px + 20, my + 36);
+          ctx.fillText(title, midX, my + scrollH * 0.32);
+          ctx.font = '12px Segoe UI';
+          ctx.fillStyle = 'rgba(50,35,20,0.75)';
+          ctx.fillText(Math.min(progress, m.need) + '/' + m.need + ' · монеты ×' + m.reward, midX, my + scrollH * 0.52);
+          const rollLineY = my + scrollH * 0.72;
+          if (isImageReady(rollImg)) {
+            ctx.drawImage(rollImg, midX - 36, rollLineY - 9, 18, 18);
+          }
+          ctx.fillStyle = 'rgba(120,30,30,0.9)';
+          ctx.font = 'bold 12px Segoe UI';
+          ctx.textAlign = 'left';
+          ctx.fillText('+1000', midX - 14, rollLineY + 1);
+          ctx.textBaseline = 'alphabetic';
+
           if (done) {
-            ctx.fillStyle = '#4ecdc4';
-            ctx.font = 'bold 11px Segoe UI';
+            ctx.fillStyle = '#2e7d32';
+            ctx.font = 'bold 14px Segoe UI';
             ctx.textAlign = 'right';
-            ctx.fillText('✓', px + pw - 22, my + 28);
+            ctx.fillText('✓', sx0 + scrollW - 24, my + scrollH / 2);
           } else if (ready) {
+            // Кнопка −30%, левый край на месте
+            const claimW = Math.round(80 * 0.7);
+            const claimH = Math.round(28 * 0.7);
+            const claimX = sx0 + scrollW - 100;
+            const claimY = my + scrollH / 2 - claimH / 2;
             ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
-            roundRect(px + pw - 96, my + 12, 74, 26, 8);
+            roundRect(claimX, claimY, claimW, claimH, 7);
             ctx.fill();
             ctx.fillStyle = '#1a1a2e';
             ctx.font = 'bold 11px Segoe UI';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('Забрать', px + pw - 59, my + 25);
+            ctx.fillText('Забрать', claimX + claimW / 2, claimY + claimH / 2);
             ctx.textBaseline = 'alphabetic';
-            titleLayout._menuHits.push({ type: 'claim', id: m.id, reward: m.reward, x: px + pw - 96, y: my + 12, w: 74, h: 26 });
+            titleLayout._menuHits.push({
+              type: 'claim', id: m.id, reward: m.reward,
+              x: claimX, y: claimY, w: claimW, h: claimH
+            });
           }
-          my += rowH;
+        }
+        ctx.restore();
+
+        // Скроллбар
+        if (missionScrollMax > 0) {
+          const barH = Math.max(24, viewH * (viewH / contentH));
+          const barY = viewTop + (viewH - barH) * (missionScrollY / missionScrollMax);
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          roundRect(px + pw - 10, barY, 4, barH, 2);
+          ctx.fill();
         }
 
-        // Кнопка «Забрать все» внизу
+        // «Забрать все» внизу
         const claimable = sorted.filter(s => s.ready);
-        const claimAllY = py + ph - 58;
+        const claimAllY = py + ph - 42;
         if (claimable.length > 0) {
           ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
-          roundRect(px + 40, claimAllY, pw - 80, 34, 12);
+          roundRect(px + 40, claimAllY, pw - 80, 30, 10);
           ctx.fill();
           ctx.fillStyle = '#1a1a2e';
-          ctx.font = 'bold 14px Segoe UI';
+          ctx.font = 'bold 13px Segoe UI';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           const sum = claimable.reduce((s, c) => s + c.m.reward, 0);
-          ctx.fillText('Забрать все (' + claimable.length + ') · ×' + sum, WIDTH / 2, claimAllY + 17);
+          ctx.fillText('Забрать все (' + claimable.length + ') · ×' + sum, WIDTH / 2, claimAllY + 15);
           ctx.textBaseline = 'alphabetic';
-          titleLayout._menuHits.push({ type: 'claimAll', x: px + 40, y: claimAllY, w: pw - 80, h: 34 });
+          titleLayout._menuHits.push({ type: 'claimAll', x: px + 40, y: claimAllY, w: pw - 80, h: 30 });
         }
-
-        const misPages = Math.ceil(sorted.length / perPage);
-        ctx.font = 'bold 13px Segoe UI';
-        ctx.fillStyle = missionPage > 0 ? '#4ecdc4' : '#555';
-        ctx.textAlign = 'left';
-        ctx.fillText('‹', px + 16, py + ph - 16);
-        titleLayout._menuHits.push({ type: 'misPrev', x: px + 8, y: py + ph - 32, w: 40, h: 28 });
-        ctx.fillStyle = missionPage < misPages - 1 ? '#4ecdc4' : '#555';
-        ctx.textAlign = 'right';
-        ctx.fillText('›', px + pw - 16, py + ph - 16);
-        titleLayout._menuHits.push({ type: 'misNext', x: px + pw - 48, y: py + ph - 32, w: 40, h: 28 });
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
         ctx.font = '11px Segoe UI';
-        ctx.fillText((missionPage + 1) + '/' + misPages, WIDTH / 2, py + ph - 16);
+        ctx.textAlign = 'center';
+        if (claimable.length === 0) ctx.fillText('свайп ↑↓', WIDTH / 2, py + ph - 16);
       }
 
       if (titleMenu === 'settings') {
@@ -3774,14 +3938,17 @@
               return;
             }
             if (h.type === 'misPrev' && missionPage > 0) missionPage--;
-            if (h.type === 'misNext' && (missionPage + 1) * 8 < MISSIONS.length) missionPage++;
+            if (h.type === 'misNext' && (missionPage + 1) * 6 < MISSIONS.length) missionPage++;
             if (h.type === 'claim' && !missionsDone[h.id]) {
+              if (missionDidScroll) { missionDidScroll = false; return; }
               missionsDone[h.id] = true;
               totalCoins += h.reward;
+              totalRolls += 1000;
               saveProgress();
               saveMetaProgress();
               secretFlashTimer = 60;
-              secretFlashText = '+' + h.reward;
+              secretFlashText = '+1000💎';
+              coinShake = 12;
             }
             if (h.type === 'claimAll') {
               let sum = 0;
@@ -3796,10 +3963,11 @@
               }
               if (cnt > 0) {
                 totalCoins += sum;
+                totalRolls += cnt * 1000;
                 saveProgress();
                 saveMetaProgress();
                 secretFlashTimer = 70;
-                secretFlashText = '+' + sum;
+                secretFlashText = '+' + (cnt * 1000);
                 coinShake = 14;
               }
             }
@@ -3852,6 +4020,8 @@
               levelScrollV = 0;
             } else if (b.key === 'missions') {
               titleMenu = 'missions';
+              missionScrollY = 0;
+              missionScrollV = 0;
             } else if (b.key === 'settings') {
               titleMenu = 'settings';
             }
@@ -3930,6 +4100,7 @@
             if (thirdCharTapCount >= 25) {
               totalCoins = 0;
               totalCrystals = 0;
+              totalRolls = 0;
               unlockedChars = [true, false, false, false, false, false];
               invBonus1 = 0;
               invBonus2 = 0;
