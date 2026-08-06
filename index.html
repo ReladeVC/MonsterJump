@@ -279,6 +279,7 @@
     let bgImg = null;
     let bg2Img = null;
     let bg3Img = null;
+    let levelBgImgs = [null, null, null, null, null];
     let liderImg = null;
     let goldImg = null;
     let allgoldImg = null;
@@ -355,7 +356,8 @@
     const SECRET_CODES = {
       monstergold: 'coins',
       monsterall: 'unlock',
-      monsterdell: 'reset'
+      monsterdell: 'reset',
+      openall: 'levels'
     };
     let secretBuffer = '';
     let secretFlashTimer = 0;
@@ -545,6 +547,21 @@
     levelRangeImgs[2] = loadImageWithFallback(['assets/41_60.png', 'assets/41-60.png']);
     levelRangeImgs[3] = loadImageWithFallback(['assets/61_80.png', 'assets/61-80.png']);
     levelRangeImgs[4] = loadImageWithFallback(['assets/81_100.png', 'assets/81-100.png']);
+    levelBgImgs[0] = loadImageWithFallback([
+      'assets/background1_20.PNG', 'assets/background1_20.png', 'assets/Background1_20.png'
+    ]);
+    levelBgImgs[1] = loadImageWithFallback([
+      'assets/background21_40.PNG', 'assets/background21_40.png', 'assets/Background21_40.png'
+    ]);
+    levelBgImgs[2] = loadImageWithFallback([
+      'assets/background41_60.PNG', 'assets/background41_60.png', 'assets/Background41_60.png'
+    ]);
+    levelBgImgs[3] = loadImageWithFallback([
+      'assets/background61_80.PNG', 'assets/background61_80.png', 'assets/Background61_80.png'
+    ]);
+    levelBgImgs[4] = loadImageWithFallback([
+      'assets/background81_100.PNG', 'assets/background81_100.png', 'assets/Background81_100.png'
+    ]);
     completeImg = loadImageWithFallback([
       'assets/complite.png', 'assets/complete.png', 'assets/Complete.png'
     ]);
@@ -558,6 +575,14 @@
       if (n <= 60) return levelRangeImgs[2];
       if (n <= 80) return levelRangeImgs[3];
       return levelRangeImgs[4];
+    }
+
+    function getLevelBgImg(n) {
+      if (n <= 20) return levelBgImgs[0];
+      if (n <= 40) return levelBgImgs[1];
+      if (n <= 60) return levelBgImgs[2];
+      if (n <= 80) return levelBgImgs[3];
+      return levelBgImgs[4];
     }
 
     function isImageReady(img) {
@@ -627,13 +652,21 @@
 
     // Меню: null | 'levels' | 'missions' | 'settings'
     let titleMenu = null;
-    let levelPage = 0; // страницы по 50 уровней
+    let levelPage = 0;
     let missionPage = 0;
+    let levelScrollY = 0;
+    let levelScrollV = 0;
+    let levelScrollMax = 0;
+    let levelDrag = null; // { y, scroll }
+    let levelDidScroll = false;
     let currentLevel = 0; // 0 = endless, 1..100 = уровень
     let levelTarget = 0;
     let levelWinLevel = 0; // какой уровень только что пройден
     let levelWinTimer = 0;
     let levelWinBtns = { home: null, next: null };
+    let levelWinAnim = 'in'; // 'in' | 'idle' | 'out'
+    let levelWinAnimT = 0;
+    let levelWinPending = null; // 'home' | 'next'
     let maxLevelUnlocked = 1;
     let levelsCompleted = {};
     let missionsDone = {};
@@ -1391,10 +1424,20 @@
           invBonus3 = 0;
           bestScore = 0;
           selectedCharacter = 0;
+          maxLevelUnlocked = 1;
+          levelsCompleted = {};
           saveProgress();
+          saveMetaProgress();
           secretBuffer = '';
           secretFlashTimer = 90;
           secretFlashText = 'DEL';
+          coinShake = 18;
+        } else if (secretBuffer.endsWith('openall')) {
+          maxLevelUnlocked = 100;
+          saveMetaProgress();
+          secretBuffer = '';
+          secretFlashTimer = 90;
+          secretFlashText = 'LV100';
           coinShake = 18;
         }
       }
@@ -1404,14 +1447,40 @@
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
     });
 
-    // Тач — свайп, лёгкая инерция
+    function canvasToGame(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) * (WIDTH / rect.width),
+        y: (clientY - rect.top) * (HEIGHT / rect.height)
+      };
+    }
+
+    // Тач — свайп в игре + скролл уровней на титуле
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
+      if (gameState === 'title' && titleMenu === 'levels') {
+        const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+        const clip = titleLayout._levelClip;
+        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+          levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
+          levelScrollV = 0;
+        }
+        return;
+      }
       if (gameState !== 'playing' || isPaused) return;
       touchX = e.touches[0].clientX;
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
+      if (gameState === 'title' && titleMenu === 'levels' && levelDrag) {
+        const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+        const dy = p.y - levelDrag.y;
+        if (Math.abs(dy) > 4) levelDrag.moved = true;
+        levelScrollY = Math.max(0, Math.min(levelScrollMax, levelDrag.scroll - dy));
+        levelScrollV = levelDrag.lastY - p.y;
+        levelDrag.lastY = p.y;
+        return;
+      }
       if (gameState !== 'playing' || isPaused || touchX === null) return;
       const currentX = e.touches[0].clientX;
       const dx = currentX - touchX;
@@ -1429,6 +1498,10 @@
       }
     }, { passive: false });
     canvas.addEventListener('touchend', () => {
+      if (levelDrag) {
+        levelDidScroll = !!levelDrag.moved;
+        levelDrag = null;
+      }
       touchX = null;
       setTimeout(() => {
         if (touchX === null) {
@@ -1437,6 +1510,39 @@
         }
       }, 90);
     });
+
+    // Мышь — скролл уровней
+    canvas.addEventListener('mousedown', e => {
+      if (gameState === 'title' && titleMenu === 'levels') {
+        const p = canvasToGame(e.clientX, e.clientY);
+        const clip = titleLayout._levelClip;
+        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+          levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
+          levelScrollV = 0;
+        }
+      }
+    });
+    window.addEventListener('mousemove', e => {
+      if (!levelDrag || titleMenu !== 'levels') return;
+      const p = canvasToGame(e.clientX, e.clientY);
+      const dy = p.y - levelDrag.y;
+      if (Math.abs(dy) > 4) levelDrag.moved = true;
+      levelScrollY = Math.max(0, Math.min(levelScrollMax, levelDrag.scroll - dy));
+      levelScrollV = levelDrag.lastY - p.y;
+      levelDrag.lastY = p.y;
+    });
+    window.addEventListener('mouseup', () => {
+      if (levelDrag) {
+        levelDidScroll = !!levelDrag.moved;
+        levelDrag = null;
+      }
+    });
+    canvas.addEventListener('wheel', e => {
+      if (gameState !== 'title' || titleMenu !== 'levels') return;
+      e.preventDefault();
+      levelScrollY = Math.max(0, Math.min(levelScrollMax, levelScrollY + e.deltaY * 0.5));
+      levelScrollV = 0;
+    }, { passive: false });
 
     // Мышь (для удобства на ПК)
     let mouseDown = false;
@@ -1472,8 +1578,40 @@
       if (gameState === 'levelwin') {
         levelWinTimer++;
         updateParticles();
-        // Редкие искры
-        if (levelWinTimer % 4 === 0) {
+        // Анимация появления / исчезновения
+        const ANIM_FRAMES = 28;
+        if (levelWinAnim === 'in') {
+          levelWinAnimT = Math.min(1, levelWinAnimT + 1 / ANIM_FRAMES);
+          if (levelWinAnimT >= 1) levelWinAnim = 'idle';
+        } else if (levelWinAnim === 'out') {
+          levelWinAnimT = Math.max(0, levelWinAnimT - 1 / ANIM_FRAMES);
+          if (levelWinAnimT <= 0) {
+            const action = levelWinPending;
+            levelWinPending = null;
+            levelWinAnim = 'in';
+            if (action === 'home') {
+              currentLevel = 0;
+              levelTarget = 0;
+              levelWinLevel = 0;
+              goToMenu();
+            } else if (action === 'next') {
+              if (levelWinLevel >= 100) {
+                currentLevel = 0;
+                levelTarget = 0;
+                levelWinLevel = 0;
+                goToMenu();
+              } else {
+                const next = levelWinLevel + 1;
+                currentLevel = next;
+                levelTarget = getLevelTarget(next);
+                levelWinLevel = 0;
+                startGame();
+              }
+            }
+            return;
+          }
+        }
+        if (levelWinAnim === 'idle' && levelWinTimer % 4 === 0) {
           particles.push({
             x: Math.random() * WIDTH,
             y: -10,
@@ -1796,6 +1934,9 @@
         });
       }
       levelWinTimer = 0;
+      levelWinAnim = 'in';
+      levelWinAnimT = 0;
+      levelWinPending = null;
       gameState = 'levelwin';
       isPaused = false;
       keys.left = false;
@@ -1803,7 +1944,6 @@
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
       gameOverEl.style.display = 'none';
-      // currentLevel оставляем до нажатия Next
     }
 
     function fillGameOverStats() {
@@ -1832,8 +1972,7 @@
         bestRunCoins = runCoins;
         try { localStorage.setItem('monsterJumpBestRunCoins', String(bestRunCoins)); } catch (e) {}
       }
-      currentLevel = 0;
-      levelTarget = 0;
+      // currentLevel / levelTarget не сбрасываем — фон и «Повторить» на том же уровне
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
     }
@@ -1896,28 +2035,24 @@
       isPaused = false;
       keys.left = false;
       keys.right = false;
+      currentLevel = 0;
+      levelTarget = 0;
+      levelWinLevel = 0;
     }
 
     function retryGame() {
-      // Повторить с тем же персонажем
+      // Повторить с тем же персонажем (и тем же уровнем, если был)
       gameOverEl.style.display = 'none';
+      if (currentLevel > 0) {
+        levelTarget = getLevelTarget(currentLevel);
+      }
       startGame();
     }
 
     // ---------- ОТРИСОВКА ----------
     function drawBackground() {
-      // Плавный ease-переход на ~2000 m
-      // 4000–6000 → background2 | 14000–16000 → background3
-      function smoothstep(edge0, edge1, x) {
-        const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-        return t * t * (3 - 2 * t);
-      }
-      const t2 = smoothstep(4000, 6000, score);
-      const t3 = smoothstep(14000, 16000, score);
-
       const parallax = 0.25;
       const bgH = HEIGHT;
-      // Обычный тайл без переворота (бесконечный спрайт как есть)
       let scroll = Math.floor(-cameraY * parallax);
       let offset = ((scroll % bgH) + bgH) % bgH;
 
@@ -1925,7 +2060,6 @@
         if (!isImageReady(img) || alpha <= 0.001) return;
         ctx.save();
         ctx.globalAlpha = alpha;
-        // Небольшое перекрытие 2px — без зеркала
         for (let i = -1; i <= 2; i++) {
           const y = offset + i * bgH - 1;
           ctx.drawImage(img, 0, y, WIDTH, bgH + 2);
@@ -1933,6 +2067,23 @@
         ctx.restore();
       }
 
+      // Режим уровней: фон по диапазону 1-20 / 21-40 / …
+      if (currentLevel > 0 || levelWinLevel > 0) {
+        const n = currentLevel > 0 ? currentLevel : levelWinLevel;
+        const lvlBg = getLevelBgImg(n);
+        if (isImageReady(lvlBg)) {
+          drawBgLayer(lvlBg, 1);
+          return;
+        }
+      }
+
+      // Бесконечный режим: плавный переход bg → bg2 → bg3
+      function smoothstep(edge0, edge1, x) {
+        const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      }
+      const t2 = smoothstep(4000, 6000, score);
+      const t3 = smoothstep(14000, 16000, score);
       const a3 = t3;
       const a2 = Math.max(0, t2 * (1 - t3));
       const a1 = Math.max(0, 1 - t2);
@@ -2804,29 +2955,35 @@
     }
 
     function drawTitleMenuPanel() {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const full = titleMenu === 'levels';
+      ctx.fillStyle = full ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)';
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      const pw = WIDTH - 28;
-      const ph = HEIGHT - 100;
-      const px = 14;
-      const py = 50;
-      ctx.fillStyle = 'rgba(22, 24, 40, 0.97)';
-      roundRect(px, py, pw, ph, 18);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-      ctx.lineWidth = 1.5;
-      roundRect(px, py, pw, ph, 18);
-      ctx.stroke();
+      // Окно уровней — во весь игровой экран
+      const pw = full ? WIDTH : WIDTH - 28;
+      const ph = full ? HEIGHT : HEIGHT - 100;
+      const px = full ? 0 : 14;
+      const py = full ? 0 : 50;
+      ctx.fillStyle = 'rgba(22, 24, 40, 0.98)';
+      if (full) {
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      } else {
+        roundRect(px, py, pw, ph, 18);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1.5;
+        roundRect(px, py, pw, ph, 18);
+        ctx.stroke();
+      }
 
       const titles = { levels: 'Уровни', missions: 'Задания', settings: 'Настройки' };
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 22px Segoe UI, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(titles[titleMenu] || '', WIDTH / 2, py + 32);
+      ctx.fillText(titles[titleMenu] || '', WIDTH / 2, py + (full ? 36 : 32));
 
       // Закрыть
-      const cx = px + pw - 28;
-      const cy = py + 28;
+      const cx = px + pw - (full ? 28 : 28);
+      const cy = py + (full ? 28 : 28);
       ctx.fillStyle = 'rgba(255,255,255,0.15)';
       ctx.beginPath();
       ctx.arc(cx, cy, 14, 0, Math.PI * 2);
@@ -2841,28 +2998,47 @@
       titleLayout._menuHits = [];
 
       if (titleMenu === 'levels') {
-        // 5 колонок × 10 рядов = 50 на экран
-        const perPage = 50;
-        const start = levelPage * perPage + 1;
-        const end = Math.min(100, start + perPage - 1);
+        // Все 100 уровней на одной странице, скролл свайпом
         const cols = 5;
-        const cellS = 48; // квадратные ячейки
+        const cellS = 58;
         const cellW = cellS;
         const cellH = cellS;
-        const gap = 5;
+        const gap = 8;
         const gridW = cols * cellW + (cols - 1) * gap;
         const gx0 = (WIDTH - gridW) / 2;
-        let gy = py + 44;
-        for (let n = start; n <= end; n++) {
-          const i = n - start;
+        const rows = Math.ceil(100 / cols);
+        const contentH = rows * (cellH + gap);
+        const viewTop = py + 56;
+        const viewH = ph - 72;
+        levelScrollMax = Math.max(0, contentH - viewH);
+        levelScrollY = Math.max(0, Math.min(levelScrollMax, levelScrollY));
+
+        // Инерция скролла
+        if (!levelDrag && Math.abs(levelScrollV) > 0.05) {
+          levelScrollY += levelScrollV;
+          levelScrollV *= 0.92;
+          if (levelScrollY < 0) { levelScrollY = 0; levelScrollV = 0; }
+          if (levelScrollY > levelScrollMax) { levelScrollY = levelScrollMax; levelScrollV = 0; }
+        }
+
+        titleLayout._levelClip = { x: px + 4, y: viewTop, w: pw - 8, h: viewH };
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px + 4, viewTop, pw - 8, viewH);
+        ctx.clip();
+
+        for (let n = 1; n <= 100; n++) {
+          const i = n - 1;
           const col = i % cols;
           const row = Math.floor(i / cols);
           const gx = gx0 + col * (cellW + gap);
-          const gy2 = gy + row * (cellH + gap);
+          const gy2 = viewTop + row * (cellH + gap) - levelScrollY;
+          if (gy2 + cellH < viewTop - 4 || gy2 > viewTop + viewH + 4) continue;
+
           const unlocked = isLevelUnlocked(n);
           const done = !!levelsCompleted[n];
           const bg = getLevelRangeImg(n);
-          // Фон по диапазону
           if (isImageReady(bg)) {
             ctx.save();
             if (!unlocked) ctx.globalAlpha = 0.35;
@@ -2874,7 +3050,6 @@
             roundRect(gx, gy2, cellW, cellH, 8);
             ctx.fill();
           }
-          // Крупная цифра уровня по центру
           ctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
           ctx.font = 'bold 20px Segoe UI, Arial';
           ctx.textAlign = 'center';
@@ -2884,32 +3059,30 @@
           ctx.fillText(String(n), gx + cellW / 2, gy2 + cellH / 2);
           ctx.shadowBlur = 0;
           ctx.textBaseline = 'alphabetic';
-          // Пройден: complite.png — правый нижний угол
           if (done && isImageReady(completeImg)) {
             const cs = Math.floor(cellS * 0.38);
             ctx.drawImage(completeImg, gx + cellW - cs - 2, gy2 + cellH - cs - 2, cs, cs);
           }
-          // Закрыт: close.png — по центру, в 2 раза меньше ячейки
           if (!unlocked && isImageReady(closeImg)) {
             const cs = Math.floor(cellS / 2);
             ctx.drawImage(closeImg, gx + (cellW - cs) / 2, gy2 + (cellH - cs) / 2, cs, cs);
           }
           if (unlocked) titleLayout._menuHits.push({ type: 'level', n, x: gx, y: gy2, w: cellW, h: cellH });
         }
-        const pages = Math.ceil(100 / perPage);
-        ctx.font = 'bold 14px Segoe UI';
-        ctx.fillStyle = levelPage > 0 ? '#4ecdc4' : '#555';
-        ctx.textAlign = 'left';
-        ctx.fillText('‹ Назад', px + 16, py + ph - 20);
-        titleLayout._menuHits.push({ type: 'levelPrev', x: px + 10, y: py + ph - 40, w: 80, h: 30 });
-        ctx.fillStyle = levelPage < pages - 1 ? '#4ecdc4' : '#555';
-        ctx.textAlign = 'right';
-        ctx.fillText('Далее ›', px + pw - 16, py + ph - 20);
-        titleLayout._menuHits.push({ type: 'levelNext', x: px + pw - 90, y: py + ph - 40, w: 80, h: 30 });
+        ctx.restore();
+
+        // Скроллбар
+        if (levelScrollMax > 0) {
+          const barH = Math.max(24, viewH * (viewH / contentH));
+          const barY = viewTop + (viewH - barH) * (levelScrollY / levelScrollMax);
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          roundRect(px + pw - 10, barY, 4, barH, 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '11px Segoe UI';
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = '12px Segoe UI';
-        ctx.fillText((levelPage + 1) + ' / ' + pages, WIDTH / 2, py + ph - 20);
+        ctx.fillText('свайп ↑↓', WIDTH / 2, py + ph - 14);
       }
 
       if (titleMenu === 'missions') {
@@ -3023,7 +3196,7 @@
         sy += 55;
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = '12px Segoe UI';
-        ctx.fillText('Коды: monstergold · monsterall · monsterdell', px + 28, sy);
+        ctx.fillText('Коды: monstergold · monsterall · monsterdell · openall', px + 28, sy);
       }
     }
 
@@ -3233,22 +3406,41 @@
     }
 
     function drawLevelWinScreen() {
-      // Золотая вспышка в начале
-      const t = Math.min(1, levelWinTimer / 30);
-      if (levelWinTimer < 20) {
-        ctx.fillStyle = `rgba(255, 220, 80, ${(20 - levelWinTimer) / 40})`;
+      // Ease: плавное появление из центра / уход в центр
+      const easeOutBack = (x) => {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+      };
+      const easeIn = (x) => x * x;
+      let anim = levelWinAnimT;
+      if (levelWinAnim === 'in') anim = easeOutBack(Math.min(1, levelWinAnimT));
+      else if (levelWinAnim === 'out') anim = easeIn(levelWinAnimT);
+      else anim = 1;
+      const scale = Math.max(0.01, anim);
+      const alpha = Math.max(0, Math.min(1, levelWinAnimT));
+
+      // Затемнение фона
+      ctx.fillStyle = `rgba(8, 12, 28, ${0.65 * alpha})`;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      // Золотая вспышка при появлении
+      if (levelWinAnim === 'in' && levelWinAnimT < 0.5) {
+        ctx.fillStyle = `rgba(255, 220, 80, ${(0.5 - levelWinAnimT) * 0.35})`;
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
       }
-      ctx.fillStyle = `rgba(8, 12, 28, ${0.55 + t * 0.2})`;
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
       const panelW = 300;
       const panelH = 260;
       const panelX = (WIDTH - panelW) / 2;
       const panelY = (HEIGHT - panelH) / 2 - 20;
 
-      // Пульс рамки
-      const pulse = 0.5 + 0.5 * Math.sin(levelWinTimer * 0.12);
+      ctx.save();
+      ctx.translate(WIDTH / 2, HEIGHT / 2 - 10);
+      ctx.scale(scale, scale);
+      ctx.translate(-WIDTH / 2, -(HEIGHT / 2 - 10));
+      ctx.globalAlpha = alpha;
+
+      const pulse = levelWinAnim === 'idle' ? (0.5 + 0.5 * Math.sin(levelWinTimer * 0.12)) : 0.5;
       ctx.save();
       ctx.shadowColor = `rgba(78, 205, 196, ${0.35 + pulse * 0.35})`;
       ctx.shadowBlur = 20;
@@ -3305,8 +3497,16 @@
       ctx.fillText('Домой', homeX + btnS / 2, btnY + btnS + 16);
       ctx.fillText(levelWinLevel >= 100 ? 'Финиш' : 'Далее', nextX + btnS / 2, btnY + btnS + 16);
 
-      levelWinBtns.home = { x: homeX, y: btnY, w: btnS, h: btnS };
-      levelWinBtns.next = { x: nextX, y: btnY, w: btnS, h: btnS };
+      ctx.restore(); // конец scale из центра
+
+      // Hitbox только когда окно полностью открыто
+      if (levelWinAnim === 'idle') {
+        levelWinBtns.home = { x: homeX, y: btnY, w: btnS, h: btnS };
+        levelWinBtns.next = { x: nextX, y: btnY, w: btnS, h: btnS };
+      } else {
+        levelWinBtns.home = null;
+        levelWinBtns.next = null;
+      }
     }
 
     function drawScoreHUD() {
@@ -3529,6 +3729,10 @@
         for (const h of (titleLayout._menuHits || [])) {
           if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
             if (h.type === 'level' && isLevelUnlocked(h.n)) {
+              if (levelDidScroll) {
+                levelDidScroll = false;
+                return;
+              }
               currentLevel = h.n;
               levelTarget = getLevelTarget(h.n);
               titleMenu = null;
@@ -3536,8 +3740,6 @@
               startGame();
               return;
             }
-            if (h.type === 'levelPrev' && levelPage > 0) levelPage--;
-            if (h.type === 'levelNext' && levelPage < Math.ceil(100 / 50) - 1) levelPage++;
             if (h.type === 'misPrev' && missionPage > 0) missionPage--;
             if (h.type === 'misNext' && (missionPage + 1) * 8 < MISSIONS.length) missionPage++;
             if (h.type === 'claim' && !missionsDone[h.id]) {
@@ -3613,6 +3815,8 @@
               startGame();
             } else if (b.key === 'levels') {
               titleMenu = 'levels';
+              levelScrollY = 0;
+              levelScrollV = 0;
             } else if (b.key === 'missions') {
               titleMenu = 'missions';
             } else if (b.key === 'settings') {
@@ -3696,30 +3900,19 @@
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
 
-      // Меню победы на уровне
+      // Меню победы на уровне — плавное закрытие, затем действие
       if (gameState === 'levelwin') {
+        if (levelWinAnim !== 'idle') return;
         const h = levelWinBtns.home;
         const n = levelWinBtns.next;
         if (h && mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
-          currentLevel = 0;
-          levelTarget = 0;
-          levelWinLevel = 0;
-          goToMenu();
+          levelWinPending = 'home';
+          levelWinAnim = 'out';
           return;
         }
         if (n && mx >= n.x && mx <= n.x + n.w && my >= n.y && my <= n.y + n.h) {
-          if (levelWinLevel >= 100) {
-            currentLevel = 0;
-            levelTarget = 0;
-            levelWinLevel = 0;
-            goToMenu();
-            return;
-          }
-          const next = levelWinLevel + 1;
-          currentLevel = next;
-          levelTarget = getLevelTarget(next);
-          levelWinLevel = 0;
-          startGame();
+          levelWinPending = 'next';
+          levelWinAnim = 'out';
           return;
         }
         return;
