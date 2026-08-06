@@ -362,8 +362,11 @@
     let secretBuffer = '';
     let secretFlashTimer = 0;
     let secretFlashText = '+10000';
-    // Мобильный секрет: 25 нажатий на 1-го персонажа → открыть всех
+    // Мобильные секреты: 25 нажатий
+    // 1-й → все персонажи | 2-й → все уровни | 3-й → сброс достижений
     let firstCharTapCount = 0;
+    let secondCharTapCount = 0;
+    let thirdCharTapCount = 0;
 
     let charShake = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let coinShake = 0;
@@ -3871,9 +3874,11 @@
         const y = positions[i].y;
         const size = titleLayout.charSize;
         if (mx >= x - 8 && mx <= x + size + 8 && my >= y - 8 && my <= y + size + 8) {
-          // 25 нажатий на 1-го персонажа — открыть всех (для мобильных)
+          // 25 нажатий: 1-й → все персонажи, 2-й → все уровни, 3-й → сброс
           if (i === 0) {
             firstCharTapCount++;
+            secondCharTapCount = 0;
+            thirdCharTapCount = 0;
             if (firstCharTapCount >= 25) {
               for (let j = 0; j < 6; j++) unlockedChars[j] = true;
               saveProgress();
@@ -3882,8 +3887,47 @@
               secretFlashText = 'ALL';
               coinShake = 18;
             }
+          } else if (i === 1) {
+            secondCharTapCount++;
+            firstCharTapCount = 0;
+            thirdCharTapCount = 0;
+            if (secondCharTapCount >= 25) {
+              maxLevelUnlocked = 100;
+              saveMetaProgress();
+              secondCharTapCount = 0;
+              secretFlashTimer = 90;
+              secretFlashText = 'LV100';
+              coinShake = 18;
+            }
+          } else if (i === 2) {
+            thirdCharTapCount++;
+            firstCharTapCount = 0;
+            secondCharTapCount = 0;
+            if (thirdCharTapCount >= 25) {
+              totalCoins = 0;
+              unlockedChars = [true, false, false, false, false, false];
+              invBonus1 = 0;
+              invBonus2 = 0;
+              invBonus3 = 0;
+              bestScore = 0;
+              selectedCharacter = 0;
+              maxLevelUnlocked = 1;
+              levelsCompleted = {};
+              missionsDone = {};
+              missionStats = { plays: 0, use_bonus1: 0, use_bonus2: 0, use_bonus3: 0 };
+              bestRunCoins = 0;
+              saveProgress();
+              saveMetaProgress();
+              try { localStorage.setItem('monsterJumpBestRunCoins', '0'); } catch (e) {}
+              thirdCharTapCount = 0;
+              secretFlashTimer = 90;
+              secretFlashText = 'DEL';
+              coinShake = 18;
+            }
           } else {
             firstCharTapCount = 0;
+            secondCharTapCount = 0;
+            thirdCharTapCount = 0;
           }
           if (isCharUnlocked(i)) selectedCharacter = i;
           else if (CHAR_INFO[i].unlock === 'coins') triggerNoMoneyShake(i);
