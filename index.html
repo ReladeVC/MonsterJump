@@ -248,7 +248,14 @@
       note:            'assets/note.png',
       setting:         'assets/setting.png',
       home:            'assets/Home.png',
-      next:            'assets/next.png'
+      next:            'assets/next.png',
+      level1_20:       'assets/1_20.png',
+      level21_40:      'assets/21_40.png',
+      level41_60:      'assets/41_60.png',
+      level61_80:      'assets/61_80.png',
+      level81_100:     'assets/81_100.png',
+      complete:        'assets/complite.png',
+      close:           'assets/close.png'
     };
 
     let titleNameImg = null;
@@ -258,6 +265,9 @@
     let settingImg = null;
     let homeImg = null;
     let nextImg = null;
+    let levelRangeImgs = [null, null, null, null, null]; // 1-20, 21-40, 41-60, 61-80, 81-100
+    let completeImg = null;
+    let closeImg = null;
     let playerImgs = [null, null, null, null, null, null];
     let platformImg = null;
     let brokenPlatformImg = null;
@@ -530,6 +540,25 @@
     nextImg           = loadImageWithFallback([
       'assets/next.png', 'assets/Next.png', 'assets/NEXT.png'
     ]);
+    levelRangeImgs[0] = loadImageWithFallback(['assets/1_20.png', 'assets/1-20.png']);
+    levelRangeImgs[1] = loadImageWithFallback(['assets/21_40.png', 'assets/21-40.png']);
+    levelRangeImgs[2] = loadImageWithFallback(['assets/41_60.png', 'assets/41-60.png']);
+    levelRangeImgs[3] = loadImageWithFallback(['assets/61_80.png', 'assets/61-80.png']);
+    levelRangeImgs[4] = loadImageWithFallback(['assets/81_100.png', 'assets/81-100.png']);
+    completeImg = loadImageWithFallback([
+      'assets/complite.png', 'assets/complete.png', 'assets/Complete.png'
+    ]);
+    closeImg = loadImageWithFallback([
+      'assets/close.png', 'assets/Close.png', 'assets/CLOSE.png'
+    ]);
+
+    function getLevelRangeImg(n) {
+      if (n <= 20) return levelRangeImgs[0];
+      if (n <= 40) return levelRangeImgs[1];
+      if (n <= 60) return levelRangeImgs[2];
+      if (n <= 80) return levelRangeImgs[3];
+      return levelRangeImgs[4];
+    }
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
@@ -2817,12 +2846,13 @@
         const start = levelPage * perPage + 1;
         const end = Math.min(100, start + perPage - 1);
         const cols = 5;
-        const cellW = 62;
-        const cellH = 44;
+        const cellS = 48; // квадратные ячейки
+        const cellW = cellS;
+        const cellH = cellS;
         const gap = 5;
         const gridW = cols * cellW + (cols - 1) * gap;
         const gx0 = (WIDTH - gridW) / 2;
-        let gy = py + 46;
+        let gy = py + 44;
         for (let n = start; n <= end; n++) {
           const i = n - start;
           const col = i % cols;
@@ -2831,18 +2861,39 @@
           const gy2 = gy + row * (cellH + gap);
           const unlocked = isLevelUnlocked(n);
           const done = !!levelsCompleted[n];
-          ctx.fillStyle = done ? 'rgba(78,205,196,0.35)' : (unlocked ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.35)');
-          roundRect(gx, gy2, cellW, cellH, 8);
-          ctx.fill();
-          ctx.fillStyle = unlocked ? '#fff' : '#777';
-          ctx.font = 'bold 13px Segoe UI';
+          const bg = getLevelRangeImg(n);
+          // Фон по диапазону
+          if (isImageReady(bg)) {
+            ctx.save();
+            if (!unlocked) ctx.globalAlpha = 0.35;
+            else if (done) ctx.globalAlpha = 0.9;
+            ctx.drawImage(bg, gx, gy2, cellW, cellH);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = done ? 'rgba(78,205,196,0.35)' : (unlocked ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.35)');
+            roundRect(gx, gy2, cellW, cellH, 8);
+            ctx.fill();
+          }
+          // Крупная цифра уровня по центру
+          ctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
+          ctx.font = 'bold 20px Segoe UI, Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(String(n), gx + cellW / 2, gy2 + 13);
-          ctx.font = '9px Segoe UI';
-          ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.65)' : '#555';
-          ctx.fillText(getLevelTarget(n) + 'm', gx + cellW / 2, gy2 + 27);
+          ctx.shadowColor = 'rgba(0,0,0,0.55)';
+          ctx.shadowBlur = 4;
+          ctx.fillText(String(n), gx + cellW / 2, gy2 + cellH / 2);
+          ctx.shadowBlur = 0;
           ctx.textBaseline = 'alphabetic';
+          // Пройден: complite.png — правый нижний угол
+          if (done && isImageReady(completeImg)) {
+            const cs = Math.floor(cellS * 0.38);
+            ctx.drawImage(completeImg, gx + cellW - cs - 2, gy2 + cellH - cs - 2, cs, cs);
+          }
+          // Закрыт: close.png — по центру, в 2 раза меньше ячейки
+          if (!unlocked && isImageReady(closeImg)) {
+            const cs = Math.floor(cellS / 2);
+            ctx.drawImage(closeImg, gx + (cellW - cs) / 2, gy2 + (cellH - cs) / 2, cs, cs);
+          }
           if (unlocked) titleLayout._menuHits.push({ type: 'level', n, x: gx, y: gy2, w: cellW, h: cellH });
         }
         const pages = Math.ceil(100 / perPage);
