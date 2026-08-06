@@ -242,6 +242,7 @@
       allgold:         'assets/allgold.png',
       crystal:         'assets/crystal.png',
       bonus2:          'assets/bonus2.png',
+      bonus2_1:        'assets/bonus2_1.png',
       bonus3:          'assets/bonus3.png',
       pause:           'assets/pause.png',
       sound:           'assets/sound.png',
@@ -280,6 +281,7 @@
     let springImg = null;
     let bonusImg = null;
     let bonus2Img = null;
+    let bonus2ShieldImg = null;
     let bonus3Img = null;
     let bgImg = null;
     let bg2Img = null;
@@ -380,6 +382,7 @@
     let coinShake = 0;
 
     let extraLifeReady = false;
+    let shieldAngle = 0; // непрерывное вращение рамки bonus2_1
     let invincibleTimer = 0;
     let dyingTimer = 0;
     let onPlatform = false;
@@ -515,6 +518,9 @@
     ]);
     bonus2Img         = loadImageWithFallback([
       'assets/bonus2.png', 'assets/Bonus2.png', 'assets/BONUS2.png'
+    ]);
+    bonus2ShieldImg   = loadImageWithFallback([
+      'assets/bonus2_1.png', 'assets/Bonus2_1.png', 'assets/BONUS2_1.png'
     ]);
     bonus3Img         = loadImageWithFallback([
       'assets/bonus3.png', 'assets/Bonus3.png', 'assets/BONUS3.png'
@@ -1392,25 +1398,12 @@
     }
 
     function updateWaterBubbles() {
-      if (!extraLifeReady) {
-        waterBubbles = [];
-        return;
+      // Непрерывное вращение щита по часовой
+      if (extraLifeReady) {
+        shieldAngle += 0.045;
+        if (shieldAngle > Math.PI * 2) shieldAngle -= Math.PI * 2;
       }
-      if (waterBubbles.length < 10 && Math.random() < 0.35) {
-        waterBubbles.push({
-          ang: Math.random() * Math.PI * 2,
-          r: 0.35 + Math.random() * 0.55,
-          size: 2 + Math.random() * 4,
-          speed: 0.02 + Math.random() * 0.03,
-          life: 40 + Math.random() * 40
-        });
-      }
-      for (let i = waterBubbles.length - 1; i >= 0; i--) {
-        const b = waterBubbles[i];
-        b.ang += b.speed;
-        b.life--;
-        if (b.life <= 0) waterBubbles.splice(i, 1);
-      }
+      waterBubbles = [];
     }
 
     // ---------- УПРАВЛЕНИЕ ----------
@@ -2509,44 +2502,37 @@
         }
       }
 
-      // Водяной пузырь-спасение (1 раз) — у 1/6 по умолчанию или от bonus2
+      // Щит bonus2_1.png — бесконечное вращение по часовой, +5px с каждой стороны
       if (extraLifeReady && invincibleTimer <= 0 && gameState === 'playing') {
-        const rx = drawW * 0.68;
-        const ry = drawH * 0.65;
         const bx = cx;
         const by = cy - drawH * 0.1;
+        const fw = Math.max(drawW, drawH) * 1.35 + 10; // +5px с каждой стороны
+        const fh = fw;
+        const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 180);
         ctx.save();
-        // Вода
-        const wg = ctx.createRadialGradient(bx - rx * 0.2, by - ry * 0.3, 4, bx, by, rx);
-        wg.addColorStop(0, 'rgba(180, 230, 255, 0.35)');
-        wg.addColorStop(0.6, 'rgba(80, 180, 230, 0.22)');
-        wg.addColorStop(1, 'rgba(40, 140, 200, 0.08)');
-        ctx.fillStyle = wg;
-        ctx.beginPath();
-        ctx.ellipse(bx, by, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(200, 240, 255, 0.55)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Блик воды
-        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.ellipse(bx - rx * 0.25, by - ry * 0.35, rx * 0.35, ry * 0.2, -0.4, 0, Math.PI * 1.2);
-        ctx.stroke();
-        // Мелкие пузырьки
-        for (const bub of waterBubbles) {
-          const px = bx + Math.cos(bub.ang) * rx * bub.r;
-          const py = by + Math.sin(bub.ang) * ry * bub.r;
-          ctx.globalAlpha = Math.min(1, bub.life / 20) * 0.7;
-          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.translate(bx, by);
+        ctx.shadowColor = `rgba(255, 40, 40, ${0.55 + pulse * 0.35})`;
+        ctx.shadowBlur = 18 + pulse * 10;
+        ctx.rotate(shieldAngle); // непрерывное вращение
+        if (isImageReady(bonus2ShieldImg)) {
+          ctx.drawImage(bonus2ShieldImg, -fw / 2, -fh / 2, fw, fh);
+        } else {
+          ctx.strokeStyle = `rgba(255, 60, 60, ${0.7 + pulse * 0.25})`;
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(px, py, bub.size, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(150, 210, 255, 0.6)';
-          ctx.lineWidth = 1;
+          ctx.arc(0, 0, fw * 0.42, 0, Math.PI * 2);
           ctx.stroke();
         }
+        ctx.restore();
+        ctx.save();
+        const rg = ctx.createRadialGradient(bx, by, fw * 0.2, bx, by, fw * 0.55);
+        rg.addColorStop(0, 'rgba(255, 80, 60, 0)');
+        rg.addColorStop(0.6, `rgba(255, 40, 40, ${0.12 * pulse})`);
+        rg.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.arc(bx, by, fw * 0.55, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
 
