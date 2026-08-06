@@ -255,7 +255,9 @@
       level61_80:      'assets/61_80.png',
       level81_100:     'assets/81_100.png',
       complete:        'assets/complite.png',
-      close:           'assets/close.png'
+      close:           'assets/close.png',
+      frame:           'assets/frame.png',
+      price:           'assets/price.png'
     };
 
     let titleNameImg = null;
@@ -268,6 +270,8 @@
     let levelRangeImgs = [null, null, null, null, null]; // 1-20, 21-40, 41-60, 61-80, 81-100
     let completeImg = null;
     let closeImg = null;
+    let frameImg = null;
+    let priceImg = null;
     let playerImgs = [null, null, null, null, null, null];
     let platformImg = null;
     let brokenPlatformImg = null;
@@ -296,28 +300,28 @@
       },
       {
         name: 'Janko',
-        price: 2500, unlock: 'coins', label: '×2 монеты',
+        price: 15000, unlock: 'coins', label: '×2 монеты',
         desc: 'Жадный до золота: все собранные монеты считаются ×2. Идеален для быстрой прокачки.'
       },
       {
         name: 'Zora',
-        price: 7500, unlock: 'coins', label: 'Магнит',
+        price: 35000, unlock: 'coins', label: 'Магнит',
         desc: 'Магнит: монеты сами летят к персонажу. Удобно на высокой скорости и в полёте.'
       },
       {
         name: 'Brutus',
-        price: 100000, unlock: 'coins', label: '×2 выс. · −25% пад.',
+        price: 70000, unlock: 'coins', label: '×2 выс. · −25% пад.',
         desc: '×2 к набору высоты. Не ломает разрушающиеся платформы. Падение на 25% медленнее.'
       },
       {
         name: 'Luma',
-        price: 0, unlock: 'height', heightReq: 15000, label: 'Медл. ×2 монеты',
-        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2. Открывается рекордом 15 000 m.'
+        price: 140000, unlock: 'coins', label: 'Медл. ×2 монеты',
+        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2.'
       },
       {
         name: 'Hex',
-        price: 0, unlock: 'height', heightReq: 25000, label: 'Все силы',
-        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, высота ×2, падение −50%. Открывается рекордом 25 000 m.'
+        price: 280000, unlock: 'coins', label: 'Все силы',
+        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, высота ×2, падение −50%.'
       }
     ];
     let charInfoPopup = -1; // индекс персонажа для окна способностей, -1 = закрыто
@@ -367,8 +371,10 @@
     let firstCharTapCount = 0;
     let secondCharTapCount = 0;
     let thirdCharTapCount = 0;
+    let fourthCharTapCount = 0;
 
     let charShake = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let charSelectScale = [1, 1, 1, 1, 1, 1]; // плавное увеличение выбранного
     let coinShake = 0;
 
     let extraLifeReady = false;
@@ -570,6 +576,12 @@
     ]);
     closeImg = loadImageWithFallback([
       'assets/close.png', 'assets/Close.png', 'assets/CLOSE.png'
+    ]);
+    frameImg = loadImageWithFallback([
+      'assets/frame.png', 'assets/Frame.png', 'assets/FRAME.png'
+    ]);
+    priceImg = loadImageWithFallback([
+      'assets/price.png', 'assets/Price.png', 'assets/PRICE.png'
     ]);
 
     function getLevelRangeImg(n) {
@@ -786,6 +798,7 @@
 
     function startMusic() {
       if (!musicEnabled) return;
+      if (gameState === 'title' || gameState === 'loading') return;
       const p = music.play();
       if (p && p.then) {
         p.then(() => { musicStarted = true; }).catch(() => {});
@@ -1405,11 +1418,11 @@
           secretBuffer = secretBuffer.slice(-12);
         }
         if (secretBuffer.endsWith('monstergold')) {
-          totalCoins += 10000;
+          totalCoins += 1000000;
           saveProgress();
           secretBuffer = '';
           secretFlashTimer = 90;
-          secretFlashText = '+10000';
+          secretFlashText = '+1M';
           coinShake = 18;
         } else if (secretBuffer.endsWith('monsterall')) {
           for (let i = 0; i < 6; i++) unlockedChars[i] = true;
@@ -2030,7 +2043,7 @@
     }
 
     function goToMenu() {
-      // В меню (выбор персонажа)
+      // В меню (выбор персонажа) — без музыки
       gameState = 'title';
       gameOverEl.style.display = 'none';
       scoreEl.style.display = 'none';
@@ -2041,6 +2054,7 @@
       currentLevel = 0;
       levelTarget = 0;
       levelWinLevel = 0;
+      stopMusic();
     }
 
     function retryGame() {
@@ -2581,8 +2595,8 @@
     const titleLayout = {
       charSize: 72,
       charY: 248,
-      charGap: 18,
-      rowGap: 148, // место под имя + кнопку покупки
+      charGap: 28,
+      rowGap: 158,
       startBtnW: 180,
       startBtnH: 70,
       startBtnY: 590,
@@ -2696,51 +2710,46 @@
         const sy = shakeT > 0 ? Math.cos(shakeT * 3.1) * 3 : 0;
         const baseX = positions[i].x;
         const baseY = positions[i].y;
-        const x = baseX + sx;
-        const y = baseY + sy;
         const size = titleLayout.charSize;
         const unlocked = isCharUnlocked(i);
         const isSelected = selectedCharacter === i && unlocked;
         const info = CHAR_INFO[i];
+        // Плавное увеличение выбранной рамки
+        const targetScale = isSelected ? 1.18 : 1;
+        charSelectScale[i] += (targetScale - charSelectScale[i]) * 0.14;
+        const sc = charSelectScale[i];
+
         const pad = 8;
-        const cardX = x - pad;
-        const cardY = y - pad;
         const cardW = size + pad * 2;
         const cardH = size + pad * 2;
         const radius = 16;
+        const cx0 = baseX + size / 2 + sx;
+        const cy0 = baseY + size / 2 + sy;
+        const x = cx0 - size / 2;
+        const y = cy0 - size / 2;
+        const cardX = x - pad;
+        const cardY = y - pad;
 
-        // Прозрачно-серая подложка со скруглёнными краями
-        ctx.fillStyle = 'rgba(60, 65, 80, 0.45)';
-        roundRect(cardX, cardY, cardW, cardH, radius);
-        ctx.fill();
-        // Тонкая внутренняя обводка карточки
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1.5;
-        roundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, radius - 1);
-        ctx.stroke();
+        ctx.save();
+        ctx.translate(cx0, cy0);
+        ctx.scale(sc, sc);
+        ctx.translate(-cx0, -cy0);
 
-        // Красивая рамка выбора
-        if (isSelected) {
-          // Мягкое свечение
-          ctx.save();
-          ctx.shadowColor = 'rgba(78, 205, 196, 0.55)';
-          ctx.shadowBlur = 14;
-          ctx.strokeStyle = 'rgba(78, 205, 196, 0.9)';
-          ctx.lineWidth = 3;
-          roundRect(cardX - 3, cardY - 3, cardW + 6, cardH + 6, radius + 4);
-          ctx.stroke();
-          ctx.restore();
-
-          // Внешнее кольцо
-          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-          ctx.lineWidth = 1.5;
-          roundRect(cardX - 5, cardY - 5, cardW + 10, cardH + 10, radius + 6);
-          ctx.stroke();
-
-          // Лёгкая заливка выбора
-          ctx.fillStyle = 'rgba(78, 205, 196, 0.12)';
+        // Подложка / frame.png
+        if (isImageReady(frameImg)) {
+          const fx = cardX - 4;
+          const fy = cardY - 4;
+          const fw = cardW + 8;
+          const fh = cardH + 8;
+          ctx.drawImage(frameImg, fx, fy, fw, fh);
+        } else {
+          ctx.fillStyle = 'rgba(60, 65, 80, 0.45)';
           roundRect(cardX, cardY, cardW, cardH, radius);
           ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.lineWidth = 1.5;
+          roundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, radius - 1);
+          ctx.stroke();
         }
 
         const img = playerImgs[i];
@@ -2771,62 +2780,64 @@
         ctx.textBaseline = 'alphabetic';
         titleInfoBtns.push({ i, x: infoCx - infoR - 3, y: infoCy - infoR - 3, w: infoR * 2 + 6, h: infoR * 2 + 6 });
 
-        // Имя над персонажем
+        if (!unlocked) {
+          ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.5)' : 'rgba(0,0,0,0.45)';
+          roundRect(cardX, cardY, cardW, cardH, radius);
+          ctx.fill();
+          // close.png по центру, в 2 раза меньше рамки
+          if (isImageReady(closeImg)) {
+            const cs = Math.floor(size / 2);
+            ctx.drawImage(closeImg, x + (size - cs) / 2, y + (size - cs) / 2, cs, cs);
+          } else {
+            ctx.fillStyle = shakeT > 0 ? '#ff8a80' : 'rgba(255,255,255,0.85)';
+            ctx.font = '22px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🔒', x + size / 2, y + size / 2 - 2);
+            ctx.textBaseline = 'alphabetic';
+          }
+        }
+
+        ctx.restore(); // конец scale выбранного персонажа
+
+        // Имя над персонажем (без scale)
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 12px Segoe UI, Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(info.name, x + size / 2, cardY - 4);
+        ctx.fillText(info.name, baseX + size / 2 + sx, cardY - 4 - (sc - 1) * cardH * 0.35);
         ctx.textBaseline = 'alphabetic';
 
         if (!unlocked) {
-          ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.5)' : 'rgba(0,0,0,0.5)';
-          roundRect(cardX, cardY, cardW, cardH, radius);
-          ctx.fill();
-
-          ctx.fillStyle = shakeT > 0 ? '#ff8a80' : 'rgba(255,255,255,0.85)';
-          ctx.font = '22px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('🔒', x + size / 2, y + size / 2 - 2);
-          ctx.textBaseline = 'alphabetic';
-
-          // Покупка под персонажем
-          const buyW = size + 6;
-          const buyH = 24;
-          const buyX = baseX - 3;
+          // Покупка под персонажем — price.png как рамка
+          const buyW = size + 10;
+          const buyH = 28;
+          const buyX = baseX - 5;
           const buyY = cardY + cardH + 6;
 
           if (info.unlock === 'coins') {
             const canAfford = totalCoins >= info.price;
-            ctx.fillStyle = canAfford ? 'rgba(78, 205, 196, 0.95)' : 'rgba(80,80,90,0.9)';
-            roundRect(buyX + sx, buyY + sy, buyW, buyH, 8);
-            ctx.fill();
-            if (isImageReady(goldImg)) {
-              ctx.drawImage(goldImg, buyX + 4 + sx, buyY + 2 + sy, 18, 18);
+            if (isImageReady(priceImg)) {
+              ctx.save();
+              if (!canAfford) ctx.globalAlpha = 0.55;
+              ctx.drawImage(priceImg, buyX + sx, buyY + sy, buyW, buyH);
+              ctx.restore();
+            } else {
+              ctx.fillStyle = canAfford ? 'rgba(78, 205, 196, 0.95)' : 'rgba(80,80,90,0.9)';
+              roundRect(buyX + sx, buyY + sy, buyW, buyH, 8);
+              ctx.fill();
             }
-            ctx.fillStyle = canAfford ? '#1a1a2e' : '#bbb';
+            if (isImageReady(goldImg)) {
+              ctx.drawImage(goldImg, buyX + 16 + sx, buyY + 5 + sy, 18, 18);
+            }
+            ctx.fillStyle = canAfford ? '#fff' : '#bbb';
             ctx.font = 'bold 11px Segoe UI';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             const priceStr = info.price >= 1000 ? (info.price / 1000) + 'k' : String(info.price);
-            ctx.fillText(priceStr, buyX + 24 + sx, buyY + buyH / 2 + sy);
+            ctx.fillText(priceStr, buyX + 36 + sx, buyY + buyH / 2 + sy);
             ctx.textBaseline = 'alphabetic';
             titleLayout._buyBtns.push({ i, x: buyX, y: buyY, w: buyW, h: buyH });
-          } else if (info.unlock === 'height') {
-            // Условие по рекорду — иконка Lider + метры
-            ctx.fillStyle = 'rgba(80,80,90,0.9)';
-            roundRect(buyX + sx, buyY + sy, buyW, buyH, 8);
-            ctx.fill();
-            if (isImageReady(liderImg)) {
-              ctx.drawImage(liderImg, buyX + 4 + sx, buyY + 2 + sy, 18, 18);
-            }
-            ctx.fillStyle = '#bbb';
-            ctx.font = 'bold 10px Segoe UI';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText((info.heightReq / 1000) + 'k m', buyX + 24 + sx, buyY + buyH / 2 + sy);
-            ctx.textBaseline = 'alphabetic';
           }
         }
       }
@@ -3719,8 +3730,7 @@
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
 
-      // Любой клик на титуле — пробуем запустить музыку
-      startMusic();
+      // На титуле музыка не играет
 
       // Меню levels/missions/settings
       if (titleMenu) {
@@ -3879,6 +3889,7 @@
             firstCharTapCount++;
             secondCharTapCount = 0;
             thirdCharTapCount = 0;
+            fourthCharTapCount = 0;
             if (firstCharTapCount >= 25) {
               for (let j = 0; j < 6; j++) unlockedChars[j] = true;
               saveProgress();
@@ -3891,6 +3902,7 @@
             secondCharTapCount++;
             firstCharTapCount = 0;
             thirdCharTapCount = 0;
+            fourthCharTapCount = 0;
             if (secondCharTapCount >= 25) {
               maxLevelUnlocked = 100;
               saveMetaProgress();
@@ -3903,6 +3915,7 @@
             thirdCharTapCount++;
             firstCharTapCount = 0;
             secondCharTapCount = 0;
+            fourthCharTapCount = 0;
             if (thirdCharTapCount >= 25) {
               totalCoins = 0;
               unlockedChars = [true, false, false, false, false, false];
@@ -3924,10 +3937,24 @@
               secretFlashText = 'DEL';
               coinShake = 18;
             }
+          } else if (i === 3) {
+            fourthCharTapCount++;
+            firstCharTapCount = 0;
+            secondCharTapCount = 0;
+            thirdCharTapCount = 0;
+            if (fourthCharTapCount >= 25) {
+              totalCoins += 1000000;
+              saveProgress();
+              fourthCharTapCount = 0;
+              secretFlashTimer = 90;
+              secretFlashText = '+1M';
+              coinShake = 18;
+            }
           } else {
             firstCharTapCount = 0;
             secondCharTapCount = 0;
             thirdCharTapCount = 0;
+            fourthCharTapCount = 0;
           }
           if (isCharUnlocked(i)) selectedCharacter = i;
           else if (CHAR_INFO[i].unlock === 'coins') triggerNoMoneyShake(i);
