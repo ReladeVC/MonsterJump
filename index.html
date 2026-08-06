@@ -2872,24 +2872,22 @@
       // --- 4 кнопки в ряд: Start | Level | Note | Setting ---
       const menuImgs = [startBtnImg, levelImg, noteImg, settingImg];
       const menuKeys = ['start', 'levels', 'missions', 'settings'];
-      const btnSize = 64;
-      const btnGap = 12;
+      const btnSize = 84;
+      const btnGap = 10;
       const rowW = 4 * btnSize + 3 * btnGap;
       const rowX = (WIDTH - rowW) / 2;
-      const rowY = titleLayout.startBtnY;
+      const rowY = titleLayout.startBtnY - 8;
       titleLayout._menuBtns = [];
       for (let i = 0; i < 4; i++) {
         const bx = rowX + i * (btnSize + btnGap);
         const by = rowY;
-        ctx.fillStyle = 'rgba(0,0,0,0.28)';
-        roundRect(bx, by, btnSize, btnSize, 12);
-        ctx.fill();
+        // без подложки — только ассет
         const img = menuImgs[i];
         if (isImageReady(img)) {
-          drawSprite(img, bx + btnSize / 2, by + btnSize / 2, btnSize - 10, btnSize - 10);
+          drawSprite(img, bx + btnSize / 2, by + btnSize / 2, btnSize, btnSize);
         } else {
           ctx.fillStyle = '#fff';
-          ctx.font = 'bold 11px Segoe UI';
+          ctx.font = 'bold 12px Segoe UI';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(menuKeys[i].slice(0, 5).toUpperCase(), bx + btnSize / 2, by + btnSize / 2);
