@@ -1400,7 +1400,7 @@
     function updateWaterBubbles() {
       // Непрерывное вращение щита по часовой
       if (extraLifeReady) {
-        shieldAngle += 0.045;
+        shieldAngle += 0.09; // ×2 скорость
         if (shieldAngle > Math.PI * 2) shieldAngle -= Math.PI * 2;
       }
       waterBubbles = [];
@@ -2449,6 +2449,8 @@
       const drawY = screenY + player.height - drawH;
       const cx = drawX + drawW / 2;
       const cy = drawY + drawH * 0.7;
+      // В щите персонаж ниже на 5px
+      const bodyCy = (extraLifeReady && invincibleTimer <= 0) ? cy + 5 : cy;
 
       // Мега-аура при полёте на шаре
       if (bonusActive && gameState === 'playing') {
@@ -2502,43 +2504,58 @@
         }
       }
 
-      // Щит bonus2_1.png — бесконечное вращение по часовой, +5px с каждой стороны
+      // Щит bonus2_1.png — вращение + усиленное красное свечение
       if (extraLifeReady && invincibleTimer <= 0 && gameState === 'playing') {
         const bx = cx;
         const by = cy - drawH * 0.1;
-        const fw = Math.max(drawW, drawH) * 1.35 + 10; // +5px с каждой стороны
+        const fw = Math.max(drawW, drawH) * 1.35 + 10;
         const fh = fw;
-        const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 180);
+        const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 160);
+        // Внешний ореол
+        ctx.save();
+        const outer = ctx.createRadialGradient(bx, by, fw * 0.12, bx, by, fw * 0.8);
+        outer.addColorStop(0, `rgba(255, 100, 80, ${0.28 * pulse})`);
+        outer.addColorStop(0.4, `rgba(255, 40, 40, ${0.16 * pulse})`);
+        outer.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = outer;
+        ctx.beginPath();
+        ctx.arc(bx, by, fw * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // Вращающаяся рамка
         ctx.save();
         ctx.translate(bx, by);
-        ctx.shadowColor = `rgba(255, 40, 40, ${0.55 + pulse * 0.35})`;
-        ctx.shadowBlur = 18 + pulse * 10;
-        ctx.rotate(shieldAngle); // непрерывное вращение
+        ctx.shadowColor = `rgba(255, 50, 40, ${0.8 + pulse * 0.2})`;
+        ctx.shadowBlur = 30 + pulse * 18;
+        ctx.rotate(shieldAngle);
         if (isImageReady(bonus2ShieldImg)) {
+          ctx.globalAlpha = 0.4;
+          ctx.drawImage(bonus2ShieldImg, -fw / 2 - 3, -fh / 2 - 3, fw + 6, fh + 6);
+          ctx.globalAlpha = 1;
           ctx.drawImage(bonus2ShieldImg, -fw / 2, -fh / 2, fw, fh);
         } else {
-          ctx.strokeStyle = `rgba(255, 60, 60, ${0.7 + pulse * 0.25})`;
+          ctx.strokeStyle = `rgba(255, 60, 60, ${0.75 + pulse * 0.25})`;
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.arc(0, 0, fw * 0.42, 0, Math.PI * 2);
           ctx.stroke();
         }
         ctx.restore();
+        // Пульсирующее кольцо
         ctx.save();
-        const rg = ctx.createRadialGradient(bx, by, fw * 0.2, bx, by, fw * 0.55);
-        rg.addColorStop(0, 'rgba(255, 80, 60, 0)');
-        rg.addColorStop(0.6, `rgba(255, 40, 40, ${0.12 * pulse})`);
-        rg.addColorStop(1, 'rgba(255, 0, 0, 0)');
-        ctx.fillStyle = rg;
+        ctx.strokeStyle = `rgba(255, 130, 110, ${0.3 + pulse * 0.25})`;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = 'rgba(255, 40, 40, 0.6)';
+        ctx.shadowBlur = 12;
         ctx.beginPath();
-        ctx.arc(bx, by, fw * 0.55, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(bx, by, fw * (0.4 + pulse * 0.05), 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
       }
 
       ctx.save();
       ctx.globalAlpha = deathAlpha;
-      ctx.translate(cx, cy);
+      ctx.translate(cx, bodyCy);
       ctx.rotate(tilt + deathSpin);
       ctx.scale(stretchX, stretchY);
 
