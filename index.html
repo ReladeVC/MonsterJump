@@ -381,10 +381,15 @@
     function hasMagnet() {
       return selectedCharacter === 2 || selectedCharacter === 5;
     }
-    // −% падения только от прокачки: ур. N → −N% (макс 99 → −99%)
+    // −% падения от прокачки: равномерно, ур.99 → −70%
     function fallGravityMul() {
       const lvl = Math.max(1, Math.min(99, charLevels[selectedCharacter] || 1));
-      return Math.max(0.01, 1 - lvl * 0.01);
+      const reduce = (lvl / 99) * 0.70;
+      return Math.max(0.30, 1 - reduce);
+    }
+    function fallReducePercent(i) {
+      const lvl = Math.max(1, Math.min(99, charLevels[i != null ? i : selectedCharacter] || 1));
+      return Math.round((lvl / 99) * 70);
     }
     function hasExtraLife() {
       return selectedCharacter === 0 || selectedCharacter === 5;
@@ -3251,8 +3256,8 @@
           roundRect(upX, upY, upW, upH, 10);
           ctx.fill();
         }
-        // Подпись эффекта
-        drawOutlinedText('Падение −' + lvl + '%', WIDTH / 2, upY - 14, 'bold 12px Segoe UI, Arial', 'center');
+        // Подпись эффекта (−70% на 99 ур., равномерно)
+        drawOutlinedText('Падение −' + fallReducePercent(charInfoPopup) + '%', WIDTH / 2, upY - 14, 'bold 12px Segoe UI, Arial', 'center');
         titleLayout._infoUpgrade = { x: upX, y: upY, w: upW, h: upH, i: charInfoPopup };
 
         // Кнопка закрыть
