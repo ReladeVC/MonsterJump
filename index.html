@@ -52,7 +52,7 @@
       margin-top: 20px;
       font-size: 28px;
       font-weight: 700;
-      color: #fff;
+      color: #783915;
       text-shadow: 0 2px 8px rgba(0,0,0,0.4);
       background: rgba(0,0,0,0.25);
       padding: 8px 22px;
@@ -65,22 +65,40 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: linear-gradient(160deg, rgba(26,26,46,0.95), rgba(15,52,96,0.95));
-      color: white;
+      background: url('assets/backgroundmenu.png') center / 100% 100% no-repeat;
+      color: #783915 !important;
+      opacity: 1 !important;
       padding: 36px 40px 32px;
       border-radius: 24px;
       text-align: center;
       pointer-events: auto;
-      box-shadow: 0 16px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: none;
+      border: none;
       min-width: 280px;
+      overflow: hidden;
+      text-shadow: none;
+      filter: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    #game-over * {
+      color: #783915 !important;
+      opacity: 1 !important;
+      text-shadow: none !important;
+      -webkit-text-fill-color: #783915;
     }
     #game-over h1 {
       font-size: 24px;
       margin-bottom: 18px;
-      color: #fff;
+      color: #783915 !important;
       letter-spacing: 0.3px;
       font-weight: 700;
+      background: url('assets/menuname.png') center / 100% 100% no-repeat;
+      padding: 14px 28px;
+      display: inline-block;
+      min-width: 200px;
+      opacity: 1 !important;
+      text-shadow: none;
+      filter: none;
     }
     #game-over-stats {
       display: flex;
@@ -95,16 +113,21 @@
       gap: 10px;
       font-size: 20px;
       font-weight: 700;
-      color: #fff;
+      color: #783915 !important;
+      opacity: 1 !important;
     }
     #game-over-stats .stat-row img {
       width: 28px;
       height: 28px;
       object-fit: contain;
+      opacity: 1 !important;
+      filter: none;
     }
     #game-over-stats .stat-row span {
       min-width: 40px;
       text-align: left;
+      color: #783915 !important;
+      opacity: 1 !important;
     }
     #game-over-buttons {
       display: flex;
@@ -117,32 +140,38 @@
       font-size: 16px;
       font-weight: 700;
       padding: 14px 28px;
-      border-radius: 50px;
+      border-radius: 12px;
       cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+      transition: transform 0.15s;
       min-width: 120px;
+      background: url('assets/keycap.png') center / 100% 100% no-repeat;
+      color: #783915 !important;
+      -webkit-text-fill-color: #783915;
+      box-shadow: none;
+      opacity: 1 !important;
+      text-shadow: none;
+      filter: none;
     }
     .go-btn:hover {
       transform: translateY(-2px) scale(1.03);
-      filter: brightness(1.08);
+      filter: none;
+      color: #783915 !important;
     }
     .go-btn:active {
       transform: scale(0.97);
     }
-    #menu-btn {
-      background: linear-gradient(135deg, #5c6bc0, #3949ab);
-      color: #fff;
-      box-shadow: 0 6px 18px rgba(57, 73, 171, 0.45);
-    }
-    #retry-btn {
-      background: linear-gradient(135deg, #4ecdc4, #26a69a);
-      color: #1a1a2e;
-      box-shadow: 0 6px 18px rgba(38, 166, 154, 0.45);
+    #menu-btn, #retry-btn {
+      background: url('assets/keycap.png') center / 100% 100% no-repeat;
+      color: #783915 !important;
+      -webkit-text-fill-color: #783915;
+      box-shadow: none;
+      opacity: 1 !important;
+      filter: none;
     }
     #hint {
       position: absolute;
       bottom: 30px;
-      color: rgba(255,255,255,0.7);
+      color: #783915;
       font-size: 14px;
       text-align: center;
       pointer-events: none;
@@ -200,6 +229,7 @@
     // Более плавные прыжки — дольше в воздухе
     const GRAVITY = 0.26;
     const JUMP_FORCE = -11.2;
+    const TEXT_COL = '#783915';
     const MOVE_SPEED = 6.0;
     const PLATFORM_WIDTH = 70;   // длина как раньше
     const PLATFORM_HEIGHT = 18;  // чуть толще для читаемости
@@ -261,7 +291,10 @@
       complete:        'assets/complite.png',
       close:           'assets/close.png',
       frame:           'assets/frame.png',
-      price:           'assets/price.png'
+      price:           'assets/price.png',
+      backgroundmenu:  'assets/backgroundmenu.png',
+      menuname:        'assets/menuname.png',
+      keycap:          'assets/keycap.png'
     };
 
     let titleNameImg = null;
@@ -276,6 +309,9 @@
     let closeImg = null;
     let frameImg = null;
     let priceImg = null;
+    let backgroundMenuImg = null;
+    let menuNameImg = null;
+    let keycapImg = null;
     let playerImgs = [null, null, null, null, null, null];
     let platformImg = null;
     let brokenPlatformImg = null;
@@ -298,13 +334,13 @@
     let pauseImg = null;
     let soundImg = null;
 
-    // 0 — жизнь, 1 — ×2 монеты, 2 — магнит, 3 — ×2 высота + не ломает + −25% пад.
-    // 4 — 15000m, 5 — 25000m все силы
+    // 0 — жизнь, 1 — ×2 монеты, 2 — магнит, 3 — не ломает + −25% пад.
+    // 4 — стоять/прыжок + медл. + ×2 монеты, 5 — все силы
     const CHAR_INFO = [
       {
         name: 'Pip',
         price: 0, unlock: 'free', label: 'Запасная жизнь',
-        desc: 'Запасная жизнь: один раз при падении спасает водяной кокон и выбрасывает вверх. Подходит новичкам.'
+        desc: 'Запасная жизнь: один раз при падении спасает щитом и выбрасывает вверх. Подходит новичкам.'
       },
       {
         name: 'Janko',
@@ -318,18 +354,18 @@
       },
       {
         name: 'Brutus',
-        price: 70000, unlock: 'coins', label: '×2 выс. · −25% пад.',
-        desc: '×2 к набору высоты. Не ломает разрушающиеся платформы. Падение на 25% медленнее.'
+        price: 70000, unlock: 'coins', label: 'Прочный · −25% пад.',
+        desc: 'Не ломает разрушающиеся платформы. Падение на 25% медленнее.'
       },
       {
         name: 'Luma',
         price: 140000, unlock: 'coins', label: 'Стоять · прыжок',
-        desc: 'Падение на 50% медленнее. Монеты ×2. Высота ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше.'
+        desc: 'Падение на 50% медленнее. Монеты ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше.'
       },
       {
         name: 'Hex',
         price: 280000, unlock: 'coins', label: 'Все силы',
-        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, высота ×2, падение −50%.'
+        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, падение −50%.'
       }
     ];
     let charInfoPopup = -1; // индекс персонажа для окна способностей, -1 = закрыто
@@ -343,9 +379,6 @@
     }
     function hasMagnet() {
       return selectedCharacter === 2 || selectedCharacter === 5;
-    }
-    function hasHeightDouble() {
-      return selectedCharacter === 3 || selectedCharacter === 4 || selectedCharacter === 5;
     }
     function hasSlowFall() {
       // 5-й и 6-й: полное замедление; 4-й: половина эффекта
@@ -391,16 +424,18 @@
 
     let extraLifeReady = false;
     let shieldAngle = 0; // непрерывное вращение рамки bonus2_1
+    let shieldVisualScale = 0;
+    const SHIELD_SCALE_SPEED = 0.06;
     let invincibleTimer = 0;
     let dyingTimer = 0;
     let onPlatform = false;
-    let waterBubbles = []; // пузырьки в водяном щите
+    // waterBubbles removed — shield uses bonus2_1.png
 
     // Купленные бонусы (инвентарь)
     const BONUS1_PRICE = 500;
     const BONUS2_PRICE = 500;
     const BONUS3_PRICE = 250;
-    const ABILITY_COOLDOWN = 180; // 3 сек при 60 FPS
+    const ABILITY_COOLDOWN = 450; // 5 сек при 90 FPS
     const JUMP_BOOST_DURATION = 300; // 5 сек удвоенных прыжков
     let invBonus1 = 0; // bonus.png — полёт
     let invBonus2 = 0; // bonus2.png — водяная защита
@@ -408,6 +443,9 @@
     let cdBonus1 = 0;
     let cdBonus2 = 0;
     let cdBonus3 = 0;
+    let bonus2FromItem = false; // щит от купленного бонуса 2
+    let bonus2CdPending = false; // ждём приземления после спасения
+    let bonus2LandArmed = false; // после взлёта начали падать — можно стартовать CD
     let jumpBoostTimer = 0; // оставшееся время ×2 прыжков
 
     // Hitbox магазина бонусов (для кликов в игре)
@@ -614,6 +652,15 @@
     priceImg = loadImageWithFallback([
       'assets/price.png', 'assets/Price.png', 'assets/PRICE.png'
     ]);
+    backgroundMenuImg = loadImageWithFallback([
+      'assets/backgroundmenu.png', 'assets/Backgroundmenu.png', 'assets/BACKGROUNDMENU.png'
+    ]);
+    menuNameImg = loadImageWithFallback([
+      'assets/menuname.png', 'assets/Menuname.png', 'assets/MENUNAME.png'
+    ]);
+    keycapImg = loadImageWithFallback([
+      'assets/keycap.png', 'assets/Keycap.png', 'assets/KEYCAP.png'
+    ]);
 
     function getLevelRangeImg(n) {
       if (n <= 20) return levelRangeImgs[0];
@@ -633,6 +680,74 @@
 
     function isImageReady(img) {
       return img && img.complete && img.naturalWidth > 0;
+    }
+
+    // Фон всплывающих окон: только backgroundmenu.png (без старой рамки)
+    function drawMenuPanelBg(x, y, w, h, radius) {
+      const r = radius || 20;
+      ctx.save();
+      roundRect(x, y, w, h, r);
+      ctx.clip();
+      if (isImageReady(backgroundMenuImg)) {
+        ctx.drawImage(backgroundMenuImg, x, y, w, h);
+      } else {
+        ctx.fillStyle = 'rgba(26, 28, 50, 0.96)';
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.restore();
+    }
+
+    // Кнопка: keycap.png как фон
+    function drawKeycapBtn(x, y, w, h, label, textColor) {
+      if (isImageReady(keycapImg)) {
+        ctx.drawImage(keycapImg, x, y, w, h);
+      } else {
+        ctx.fillStyle = 'rgba(78, 205, 196, 0.95)';
+        roundRect(x, y, w, h, 12);
+        ctx.fill();
+      }
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = textColor || TEXT_COL;
+      ctx.font = 'bold ' + Math.max(12, Math.floor(h * 0.4)) + 'px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+      ctx.restore();
+    }
+
+
+    // Белый текст + мягкая обводка TEXT_COL (как номера уровней)
+    function drawOutlinedText(text, x, y, font, align) {
+      ctx.font = font || 'bold 16px Segoe UI, Arial';
+      ctx.textAlign = align || 'left';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.strokeStyle = TEXT_COL;
+      ctx.lineWidth = 3.2;
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, x, y);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Рамка названия: menuname.png
+    function drawMenuTitle(text, cx, cy, frameW, frameH) {
+      const fw = frameW || Math.max(180, text.length * 14 + 40);
+      const fh = frameH || 44;
+      const fx = cx - fw / 2;
+      const fy = cy - fh / 2;
+      if (isImageReady(menuNameImg)) {
+        ctx.drawImage(menuNameImg, fx, fy, fw, fh);
+      }
+      ctx.fillStyle = TEXT_COL;
+      ctx.globalAlpha = 1;
+      ctx.font = 'bold 20px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cx, cy + 1);
+      ctx.textBaseline = 'alphabetic';
     }
 
     function checkAssetsReady() {
@@ -679,6 +794,12 @@
     const BONUS_DURATION = 450; // 5 сек при 90 FPS
     const BONUS_SCALE = 2;
     const BONUS_FLY_FORCE = -9.5; // полёт во время бонуса
+    let bonusVisualScale = 1;  // плавное появление/исчезновение размера
+    const BONUS_SCALE_SPEED = 0.06; // скорость анимации масштаба
+    let bonus1Pending = false; // нажат, ждёт касания платформы
+    let bonus1TargetY = 0; // целевая высота (ровно +500 m)
+    const BONUS1_METERS = 500;
+    const BONUS1_WORLD = BONUS1_METERS * 10; // 1 m = 10 px
 
     // Частицы (звёздочки) при бонусе
     let particles = [];
@@ -716,9 +837,10 @@
     let levelWinLevel = 0; // какой уровень только что пройден
     let levelWinTimer = 0;
     let levelWinBtns = { home: null, next: null };
-    let levelWinAnim = 'in'; // 'in' | 'idle' | 'out'
+    let levelWinAnim = 'in'; // 'fly' | 'in' | 'idle' | 'out'
     let levelWinAnimT = 0;
     let levelWinPending = null; // 'home' | 'next'
+    let levelWinFlyTimer = 0;
     let maxLevelUnlocked = 1;
     let levelsCompleted = {};
     let missionsDone = {};
@@ -862,6 +984,7 @@
     const musicBtn = { x: WIDTH - 56, y: 10, size: 48 };
     const pauseBtn = { x: WIDTH - 112, y: 10, size: 48 };
     const pauseMenuBtns = { continue: null, menu: null };
+    const gameOverMenuBtns = { menu: null, retry: null };
 
     function isHudClick(mx, my) {
       const buttons = [pauseBtn, musicBtn];
@@ -1254,6 +1377,8 @@
       coins = [];
       bonusActive = false;
       bonusTimer = 0;
+      bonusVisualScale = 1;
+      bonus1Pending = false;
       runCoins = 0;
 
       platforms.push({
@@ -1380,28 +1505,37 @@
       return false;
     }
 
-    // bonus.png — полёт; только не во время падения; перезарядка после окончания
+    // bonus.png — нажатие ставит «в ожидание», активация после касания платформы
     function useBonus1() {
-      if (invBonus1 <= 0 || bonusActive || cdBonus1 > 0 || gameState !== 'playing' || isPaused) return false;
-      if (player.vy > 0 && !onPlatform) return false;
+      if (invBonus1 <= 0 || bonusActive || bonus1Pending || cdBonus1 > 0 || gameState !== 'playing' || isPaused) return false;
       invBonus1--;
       saveProgress();
-      bonusActive = true;
-      bonusTimer = BONUS_DURATION;
+      bonus1Pending = true;
       missionStats.use_bonus1 = (missionStats.use_bonus1 || 0) + 1;
       saveMetaProgress();
       playBonusSound();
+      // Уже на платформе — активировать при следующем касании (после прыжка)
+      // Если только что стоим (vy≈0) — ждём следующего касания
       return true;
     }
 
-    // bonus2.png — защита; перезарядка сразу после использования
+    function activateBonus1() {
+      if (!bonus1Pending || bonusActive) return;
+      bonus1Pending = false;
+      bonusActive = true;
+      bonusTimer = BONUS_DURATION;
+      // Ровно +500 m за время действия
+      bonus1TargetY = player.y - BONUS1_WORLD;
+    }
+
+    // bonus2.png — защита; CD только после срабатывания + касания платформы
     function useBonus2() {
-      if (invBonus2 <= 0 || cdBonus2 > 0 || gameState !== 'playing' || isPaused) return false;
+      if (invBonus2 <= 0 || cdBonus2 > 0 || bonus2CdPending || gameState !== 'playing' || isPaused) return false;
       if (extraLifeReady) return false;
       invBonus2--;
       saveProgress();
       extraLifeReady = true;
-      cdBonus2 = ABILITY_COOLDOWN;
+      bonus2FromItem = true;
       missionStats.use_bonus2 = (missionStats.use_bonus2 || 0) + 1;
       saveMetaProgress();
       playBonusSound();
@@ -1420,13 +1554,17 @@
       return true;
     }
 
-    function updateWaterBubbles() {
-      // Непрерывное вращение щита по часовой
+    function updateShield() {
       if (extraLifeReady) {
-        shieldAngle += 0.09; // ×2 скорость
+        shieldAngle += 0.09;
         if (shieldAngle > Math.PI * 2) shieldAngle -= Math.PI * 2;
       }
-      waterBubbles = [];
+      const target = extraLifeReady ? 1 : 0;
+      if (shieldVisualScale < target) {
+        shieldVisualScale = Math.min(target, shieldVisualScale + SHIELD_SCALE_SPEED);
+      } else if (shieldVisualScale > target) {
+        shieldVisualScale = Math.max(target, shieldVisualScale - SHIELD_SCALE_SPEED);
+      }
     }
 
     // ---------- УПРАВЛЕНИЕ ----------
@@ -1573,44 +1711,31 @@
         keys.right = false;
       }
     }, { passive: false });
-    canvas.addEventListener('touchend', () => {
-      if (levelDrag) {
-        levelDidScroll = !!levelDrag.moved;
-        levelDrag = null;
-      }
-      if (missionDrag) {
-        missionDidScroll = !!missionDrag.moved;
-        missionDrag = null;
-      }
-      touchX = null;
-      touchY = null;
-      setTimeout(() => {
-        if (touchX === null) {
-          keys.left = false;
-          keys.right = false;
-          keys.up = false;
-          keys.down = false;
-        }
-      }, 90);
-    });
-
-    // Мышь — скролл уровней
+    // Мышь: скролл меню / управление в игре
+    let mouseDown = false;
     canvas.addEventListener('mousedown', e => {
-      if (gameState !== 'title') return;
       const p = canvasToGame(e.clientX, e.clientY);
-      if (titleMenu === 'levels') {
-        const clip = titleLayout._levelClip;
-        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
-          levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
-          levelScrollV = 0;
+      if (gameState === 'title') {
+        if (titleMenu === 'levels') {
+          const clip = titleLayout._levelClip;
+          if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+            levelDrag = { y: p.y, scroll: levelScrollY, lastY: p.y, moved: false };
+            levelScrollV = 0;
+          }
+        } else if (titleMenu === 'missions') {
+          const clip = titleLayout._missionClip;
+          if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
+            missionDrag = { y: p.y, scroll: missionScrollY, lastY: p.y, moved: false };
+            missionScrollV = 0;
+          }
         }
-      } else if (titleMenu === 'missions') {
-        const clip = titleLayout._missionClip;
-        if (clip && p.x >= clip.x && p.x <= clip.x + clip.w && p.y >= clip.y && p.y <= clip.y + clip.h) {
-          missionDrag = { y: p.y, scroll: missionScrollY, lastY: p.y, moved: false };
-          missionScrollV = 0;
-        }
+        return;
       }
+      if (gameState !== 'playing') return;
+      if (isHudClick(p.x, p.y)) return;
+      mouseDown = true;
+      if (p.x < player.x + player.width / 2) keys.left = true;
+      else keys.right = true;
     });
     window.addEventListener('mousemove', e => {
       if (levelDrag && titleMenu === 'levels') {
@@ -1620,6 +1745,7 @@
         levelScrollY = Math.max(0, Math.min(levelScrollMax, levelDrag.scroll - dy));
         levelScrollV = levelDrag.lastY - p.y;
         levelDrag.lastY = p.y;
+        return;
       }
       if (missionDrag && titleMenu === 'missions') {
         const p = canvasToGame(e.clientX, e.clientY);
@@ -1628,7 +1754,12 @@
         missionScrollY = Math.max(0, Math.min(missionScrollMax, missionDrag.scroll - dy));
         missionScrollV = missionDrag.lastY - p.y;
         missionDrag.lastY = p.y;
+        return;
       }
+      if (!mouseDown || gameState !== 'playing') return;
+      const p = canvasToGame(e.clientX, e.clientY);
+      keys.left = p.x < player.x + player.width / 2;
+      keys.right = !keys.left;
     });
     window.addEventListener('mouseup', () => {
       if (levelDrag) {
@@ -1638,6 +1769,11 @@
       if (missionDrag) {
         missionDidScroll = !!missionDrag.moved;
         missionDrag = null;
+      }
+      mouseDown = false;
+      if (gameState === 'playing') {
+        keys.left = false;
+        keys.right = false;
       }
     });
     canvas.addEventListener('wheel', e => {
@@ -1653,32 +1789,7 @@
       }
     }, { passive: false });
 
-    // Мышь (для удобства на ПК)
-    let mouseDown = false;
-    canvas.addEventListener('mousedown', e => {
-      if (gameState !== 'playing') return;
-      const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
-      const my = (e.clientY - rect.top) * (HEIGHT / rect.height);
-      // Клик по кнопкам UI — не двигаем персонажа
-      if (isHudClick(mx, my)) return;
-      mouseDown = true;
-      if (mx < player.x + player.width / 2) keys.left = true;
-      else keys.right = true;
-    });
-    canvas.addEventListener('mouseup', () => {
-      mouseDown = false;
-      keys.left = false;
-      keys.right = false;
-    });
-    canvas.addEventListener('mousemove', e => {
-      if (!mouseDown || gameState !== 'playing') return;
-      const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (WIDTH / rect.width);
-      keys.left = mx < player.x + player.width / 2;
-      keys.right = !keys.left;
-    });
-
+    // HTML-кнопки проигрыша (fallback, основной UI на canvas)
     menuBtn.addEventListener('click', goToMenu);
     retryBtn.addEventListener('click', retryGame);
 
@@ -1687,7 +1798,38 @@
       if (gameState === 'levelwin') {
         levelWinTimer++;
         updateParticles();
-        // Анимация появления / исчезновения
+        // Фаза взлёта персонажа за экран
+        if (levelWinAnim === 'fly') {
+          levelWinFlyTimer++;
+          // Ускоренный полёт вверх + лёгкое замедление гравитации
+          player.vy -= 0.55;
+          player.y += player.vy;
+          player.x += player.vx * 0.4;
+          // Камера мягко следует вверх
+          const targetCam = player.y - HEIGHT * 0.45;
+          cameraY += (targetCam - cameraY) * 0.12;
+          // Звёздочки следа
+          if (levelWinFlyTimer % 2 === 0) {
+            particles.push({
+              x: player.x + player.width / 2 + (Math.random() - 0.5) * 20,
+              y: player.y + player.height,
+              vx: (Math.random() - 0.5) * 2,
+              vy: 2 + Math.random() * 3,
+              life: 20 + Math.random() * 15,
+              maxLife: 35,
+              size: 2 + Math.random() * 3,
+              rot: 0, rotSpeed: 0,
+              kind: 'star'
+            });
+          }
+          const screenY = player.y - cameraY;
+          if (screenY < -80 || levelWinFlyTimer > 70) {
+            levelWinAnim = 'in';
+            levelWinAnimT = 0;
+          }
+          return;
+        }
+        // Анимация появления / исчезновения окна
         const ANIM_FRAMES = 28;
         if (levelWinAnim === 'in') {
           levelWinAnimT = Math.min(1, levelWinAnimT + 1 / ANIM_FRAMES);
@@ -1760,7 +1902,7 @@
           dyingTimer--;
           if (dyingTimer <= 0) {
             gameState = 'gameover';
-            gameOverEl.style.display = 'block';
+            gameOverEl.style.display = 'none';
           }
         }
         return;
@@ -1771,6 +1913,10 @@
       if (cdBonus1 > 0) cdBonus1--;
       if (cdBonus2 > 0) cdBonus2--;
       if (cdBonus3 > 0) cdBonus3--;
+      // После спасения бонусом 2: «вооружить» приземление, когда начали падать
+      if (bonus2CdPending && !bonus2LandArmed && player.vy > 0) {
+        bonus2LandArmed = true;
+      }
       if (jumpBoostTimer > 0) {
         jumpBoostTimer--;
         if (jumpBoostTimer <= 0) cdBonus3 = ABILITY_COOLDOWN;
@@ -1779,15 +1925,33 @@
       // --- Бонус-эффект ---
       if (bonusActive) {
         bonusTimer--;
-        player.vy = BONUS_FLY_FORCE;
         spawnBonusParticles();
+        // Скорость так, чтобы за оставшееся время долететь ровно до +500 m
+        const remainY = player.y - bonus1TargetY;
+        if (bonusTimer > 0 && remainY > 0) {
+          // Плавный разгон по scale, но с коррекцией к цели
+          const scaleProgress = Math.max(0.15, Math.min(1, (bonusVisualScale - 1) / (BONUS_SCALE - 1)));
+          const needVy = -(remainY / bonusTimer);
+          const baseVy = -(BONUS1_WORLD / BONUS_DURATION);
+          player.vy = (baseVy * scaleProgress) * 0.35 + needVy * 0.65;
+        }
         if (bonusTimer <= 0) {
+          // Доводим до цели и заканчиваем
+          if (player.y > bonus1TargetY) player.y = bonus1TargetY;
+          player.vy = Math.min(player.vy, -1);
           bonusActive = false;
-          cdBonus1 = ABILITY_COOLDOWN; // перезарядка после окончания полёта
+          cdBonus1 = ABILITY_COOLDOWN;
         }
       }
+      // Плавный scale из центра: рост при бонусе, уменьшение после
+      const scaleTarget = bonusActive ? BONUS_SCALE : 1;
+      if (bonusVisualScale < scaleTarget) {
+        bonusVisualScale = Math.min(scaleTarget, bonusVisualScale + BONUS_SCALE_SPEED);
+      } else if (bonusVisualScale > scaleTarget) {
+        bonusVisualScale = Math.max(scaleTarget, bonusVisualScale - BONUS_SCALE_SPEED);
+      }
       updateParticles();
-      updateWaterBubbles();
+      updateShield();
 
       // Горизонтальное движение (работает и во время бонуса)
       if (keys.left) {
@@ -1869,6 +2033,7 @@
             b.collected = true;
             bonusActive = true;
             bonusTimer = BONUS_DURATION;
+            bonus1TargetY = player.y - BONUS1_WORLD;
             playBonusSound();
           }
         }
@@ -1877,7 +2042,7 @@
       // Монеты: магнит + сбор по визуальному размеру (с бонусом — увеличенный)
       const magnetOn = hasMagnet();
       const speedY = Math.abs(player.vy);
-      const bodyScale = bonusActive ? BONUS_SCALE : 1;
+      const bodyScale = bonusVisualScale;
       const bodyW = PLAYER_WIDTH * bodyScale;
       const bodyH = PLAYER_HEIGHT * bodyScale;
       // Как при отрисовке: растём вверх от ног
@@ -1946,6 +2111,17 @@
             player.y = p.y - player.height;
             const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
             onPlatform = true;
+            // Бонус 1: активация после первого касания платформы
+            if (bonus1Pending) {
+              activateBonus1();
+              break;
+            }
+            // Бонус 2: CD только после взлёта → падения → первой платформы
+            if (bonus2CdPending && bonus2LandArmed) {
+              bonus2CdPending = false;
+              bonus2LandArmed = false;
+              cdBonus2 = ABILITY_COOLDOWN;
+            }
             // Luma (5): вниз — стоять, вверх / обычный — прыгать
             const wantStand = hasStandAbility() && keys.down && !keys.up && p.type !== 'spring';
             if (wantStand) {
@@ -1971,8 +2147,7 @@
       }
 
       // Подсчёт высоты (метры), ×2 для player4/5/6
-      const heightMul = hasHeightDouble() ? 2 : 1;
-      const currentHeight = Math.max(0, Math.floor((-cameraY) / 10) * heightMul);
+      const currentHeight = Math.max(0, Math.floor((-cameraY) / 10));
       if (currentHeight > maxHeight) {
         maxHeight = currentHeight;
         score = maxHeight;
@@ -2006,8 +2181,12 @@
       if (!bonusActive && invincibleTimer <= 0 && gameState === 'playing' &&
           player.y > cameraY + HEIGHT + 50) {
         if (extraLifeReady) {
-          // Водяная защита: пузырь срывается, взлёт ×2 от пружины
+          // Щит срывается (бонус 2 или стандартная способность 1/6)
           extraLifeReady = false;
+          bonus2FromItem = false;
+          // Тот же CD: взлёт → падение → касание платформы
+          bonus2CdPending = true;
+          bonus2LandArmed = false;
           player.vy = JUMP_FORCE * 1.7 * 2;
           player.y = cameraY + HEIGHT * 0.55;
           invincibleTimer = 180; // 3 сек моргания
@@ -2050,26 +2229,32 @@
         });
       }
       levelWinTimer = 0;
-      levelWinAnim = 'in';
+      levelWinAnim = 'fly';
       levelWinAnimT = 0;
+      levelWinFlyTimer = 0;
       levelWinPending = null;
+      // Стартовый импульс вверх
+      player.vy = JUMP_FORCE * 2.4;
+      player.vx *= 0.3;
       gameState = 'levelwin';
       isPaused = false;
       keys.left = false;
       keys.right = false;
+      keys.up = false;
+      keys.down = false;
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
       gameOverEl.style.display = 'none';
     }
 
     function fillGameOverStats() {
-      // Lider.png × метры за попытку | gold.png × монеты за забег
-      finalScoreEl.textContent = '× ' + score + ' m';
-      finalCoinsEl.textContent = '× ' + runCoins;
-      if (isImageReady(liderImg)) goLiderImg.src = liderImg.src;
-      else goLiderImg.removeAttribute('src');
-      if (isImageReady(goldImg)) goGoldImg.src = goldImg.src;
-      else goGoldImg.removeAttribute('src');
+      // DOM fallback (основной UI — canvas drawGameOverScreen)
+      try {
+        if (finalScoreEl) finalScoreEl.textContent = '× ' + score + ' m';
+        if (finalCoinsEl) finalCoinsEl.textContent = '× ' + runCoins;
+        if (goLiderImg && isImageReady(liderImg)) goLiderImg.src = liderImg.src;
+        if (goGoldImg && isImageReady(goldImg)) goGoldImg.src = goldImg.src;
+      } catch (e) {}
     }
 
     function startDeathAnimation() {
@@ -2100,7 +2285,8 @@
         bestScore = score;
         saveProgress();
       }
-      gameOverEl.style.display = 'block';
+      // Рисуем на canvas — тот же TEXT_COL, без HTML-цветов
+      gameOverEl.style.display = 'none';
       hintEl.style.display = 'none';
       scoreEl.style.display = 'none';
     }
@@ -2124,14 +2310,20 @@
       score = 0;
       bonusActive = false;
       bonusTimer = 0;
+      bonusVisualScale = 1;
+      bonus1Pending = false;
       particles = [];
       isPaused = false;
       extraLifeReady = hasExtraLife();
+      shieldVisualScale = extraLifeReady ? 1 : 0;
       invincibleTimer = 0;
       dyingTimer = 0;
       cdBonus1 = 0;
       cdBonus2 = 0;
       cdBonus3 = 0;
+      bonus2FromItem = false;
+      bonus2CdPending = false;
+      bonus2LandArmed = false;
       jumpBoostTimer = 0;
       scoreEl.textContent = '0 m';
       scoreEl.style.display = 'none';
@@ -2265,7 +2457,7 @@
         ctx.fillStyle = grad;
         ctx.fillRect(p.x + 4, screenY + 2, p.width - 8, p.height - 4);
 
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = TEXT_COL;
         const ax = p.dir > 0 ? p.x + p.width - 14 : p.x + 14;
         const ay = screenY + p.height / 2;
         ctx.beginPath();
@@ -2486,7 +2678,7 @@
           ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
         } else {
           ctx.rotate(p.rot || 0);
-          ctx.fillStyle = '#FFD700';
+          ctx.fillStyle = TEXT_COL;
           ctx.beginPath();
           for (let i = 0; i < 5; i++) {
             const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
@@ -2507,13 +2699,13 @@
     function drawPlayer() {
       const screenY = player.y - cameraY;
       const img = currentPlayerImg;
-      const scale = bonusActive ? BONUS_SCALE : 1;
-      // Наклон; squash/stretch только без бонуса (в шаре — без вытягивания)
+      const scale = bonusVisualScale;
+      // Наклон; squash/stretch только без бонуса
       const tilt = Math.max(-0.28, Math.min(0.28, player.vx * 0.045));
       const speedY = Math.abs(player.vy);
       let stretchY = 1;
       let stretchX = 1;
-      if (!bonusActive) {
+      if (bonusVisualScale < 1.05) {
         if (player.vy < -2) {
           stretchY = 1 + Math.min(0.18, speedY * 0.012);
           stretchX = 1 / stretchY;
@@ -2549,42 +2741,8 @@
       // В щите персонаж ниже на 5px
       const bodyCy = (extraLifeReady && invincibleTimer <= 0) ? cy + 5 : cy;
 
-      // Мега-аура при полёте на шаре
-      if (bonusActive && gameState === 'playing') {
-        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 80);
-        ctx.save();
-        // Внешнее свечение
-        const g1 = ctx.createRadialGradient(cx, cy - drawH * 0.15, drawW * 0.2, cx, cy - drawH * 0.15, drawW * 1.1);
-        g1.addColorStop(0, `rgba(255, 200, 50, ${0.35 + pulse * 0.15})`);
-        g1.addColorStop(0.45, `rgba(255, 120, 40, ${0.18 + pulse * 0.1})`);
-        g1.addColorStop(1, 'rgba(255, 80, 0, 0)');
-        ctx.fillStyle = g1;
-        ctx.beginPath();
-        ctx.arc(cx, cy - drawH * 0.15, drawW * 1.1, 0, Math.PI * 2);
-        ctx.fill();
-        // Энергетические кольца
-        for (let i = 0; i < 3; i++) {
-          const rr = drawW * (0.45 + i * 0.18) + pulse * 6;
-          ctx.strokeStyle = `rgba(255, ${220 - i * 40}, 80, ${0.35 - i * 0.08})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(cx, cy - drawH * 0.1, rr, rr * 0.55, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        // Спиральные блики
-        ctx.strokeStyle = `rgba(255,255,255,${0.25 + pulse * 0.15})`;
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 4; i++) {
-          const a = Date.now() / 200 + i * Math.PI / 2;
-          ctx.beginPath();
-          ctx.arc(cx, cy - drawH * 0.15, drawW * 0.55, a, a + 0.6);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // След только при обычном движении (в бонусе — ветер + аура)
-      if (gameState === 'playing' && !bonusActive && (Math.abs(player.vx) > 1.5 || player.vy < -3)) {
+      // След только при обычном движении
+      if (gameState === 'playing' && bonusVisualScale < 1.05 && (Math.abs(player.vx) > 1.5 || player.vy < -3)) {
         for (let i = 1; i <= 3; i++) {
           const t = i / 4;
           const ox = -player.vx * i * 1.8;
@@ -2601,15 +2759,17 @@
         }
       }
 
-      // Щит bonus2_1.png — вращение + усиленное красное свечение
-      if (extraLifeReady && invincibleTimer <= 0 && gameState === 'playing') {
+      // Щит bonus2_1.png — плавное появление из центра + вращение
+      if (shieldVisualScale > 0.02 && invincibleTimer <= 0 && gameState === 'playing') {
         const bx = cx;
         const by = cy - drawH * 0.1;
-        const fw = Math.max(drawW, drawH) * 1.35 + 10;
+        const fw = (Math.max(drawW, drawH) * 1.35 + 10) * shieldVisualScale;
         const fh = fw;
         const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 160);
+        const sAlpha = Math.min(1, shieldVisualScale);
         // Внешний ореол
         ctx.save();
+        ctx.globalAlpha = sAlpha;
         const outer = ctx.createRadialGradient(bx, by, fw * 0.12, bx, by, fw * 0.8);
         outer.addColorStop(0, `rgba(255, 100, 80, ${0.28 * pulse})`);
         outer.addColorStop(0.4, `rgba(255, 40, 40, ${0.16 * pulse})`);
@@ -2619,16 +2779,17 @@
         ctx.arc(bx, by, fw * 0.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-        // Вращающаяся рамка
+        // Вращающаяся рамка — scale из центра
         ctx.save();
         ctx.translate(bx, by);
+        ctx.globalAlpha = sAlpha;
         ctx.shadowColor = `rgba(255, 50, 40, ${0.8 + pulse * 0.2})`;
         ctx.shadowBlur = 30 + pulse * 18;
         ctx.rotate(shieldAngle);
         if (isImageReady(bonus2ShieldImg)) {
-          ctx.globalAlpha = 0.4;
+          ctx.globalAlpha = 0.4 * sAlpha;
           ctx.drawImage(bonus2ShieldImg, -fw / 2 - 3, -fh / 2 - 3, fw + 6, fh + 6);
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = sAlpha;
           ctx.drawImage(bonus2ShieldImg, -fw / 2, -fh / 2, fw, fh);
         } else {
           ctx.strokeStyle = `rgba(255, 60, 60, ${0.75 + pulse * 0.25})`;
@@ -2640,6 +2801,7 @@
         ctx.restore();
         // Пульсирующее кольцо
         ctx.save();
+        ctx.globalAlpha = sAlpha;
         ctx.strokeStyle = `rgba(255, 130, 110, ${0.3 + pulse * 0.25})`;
         ctx.lineWidth = 2.5;
         ctx.shadowColor = 'rgba(255, 40, 40, 0.6)';
@@ -2749,7 +2911,7 @@
         ctx.drawImage(titleNameImg, (WIDTH - tw) / 2, 80, tw, th);
       } else {
         // Fallback текст
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = 'bold 42px Segoe UI, Arial';
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
@@ -2783,17 +2945,10 @@
       ctx.fill();
       const titleCoinIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
       drawSprite(titleCoinIcon, coinX + 6 + tIcon / 2, tTop + tBarH / 2 + coinOy, tIcon, tIcon);
-      ctx.fillStyle = secretFlashTimer > 0 ? '#fff' : '#FFE082';
-      ctx.font = 'bold 16px Segoe UI, Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy);
+      drawOutlinedText('× ' + totalCoins, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy, 'bold 16px Segoe UI, Arial', 'left');
       if (secretFlashTimer > 0) {
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 11px Segoe UI';
-        ctx.fillText(secretFlashText, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy + 14);
+        drawOutlinedText(secretFlashText, coinX + tIcon + 12, tTop + tBarH / 2 + coinOy + 14, 'bold 11px Segoe UI', 'left');
       }
-      ctx.textBaseline = 'alphabetic';
 
       // Кристаллы
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -2811,12 +2966,7 @@
         ctx.closePath();
         ctx.fill();
       }
-      ctx.fillStyle = '#B2EBF2';
-      ctx.font = 'bold 16px Segoe UI, Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCrystals, cryX + tIcon + 12, tTop + tBarH / 2 + coinOy);
-      ctx.textBaseline = 'alphabetic';
+      drawOutlinedText('× ' + totalCrystals, cryX + tIcon + 12, tTop + tBarH / 2 + coinOy, 'bold 16px Segoe UI, Arial', 'left');
 
       // Рубины
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -2830,18 +2980,10 @@
         ctx.arc(rollX + 20, tTop + tBarH / 2 + coinOy, 12, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = '#FFCDD2';
-      ctx.font = 'bold 16px Segoe UI, Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalRolls, rollX + tIcon + 12, tTop + tBarH / 2 + coinOy);
-      ctx.textBaseline = 'alphabetic';
+      drawOutlinedText('× ' + totalRolls, rollX + tIcon + 12, tTop + tBarH / 2 + coinOy, 'bold 16px Segoe UI, Arial', 'left');
 
       // Подпись — выше
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = '16px Segoe UI, Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Выбери персонажа', WIDTH / 2, 192);
+      drawOutlinedText('Выбери персонажа', WIDTH / 2, 192, 'bold 16px Segoe UI, Arial', 'center');
 
       // --- 6 персонажей (2×3) ---
       const positions = getCharPositions();
@@ -2934,7 +3076,7 @@
             const cs = Math.floor(size / 2);
             ctx.drawImage(closeImg, x + (size - cs) / 2, y + (size - cs) / 2, cs, cs);
           } else {
-            ctx.fillStyle = shakeT > 0 ? '#ff8a80' : 'rgba(255,255,255,0.85)';
+            ctx.fillStyle = TEXT_COL;
             ctx.font = '22px Segoe UI';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -2946,12 +3088,7 @@
         ctx.restore(); // конец scale выбранного персонажа
 
         // Имя над персонажем (без scale)
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px Segoe UI, Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(info.name, baseX + size / 2 + sx, cardY - 4 - (sc - 1) * cardH * 0.35);
-        ctx.textBaseline = 'alphabetic';
+        drawOutlinedText(info.name, baseX + size / 2 + sx, cardY - 10 - (sc - 1) * cardH * 0.35, 'bold 13px Segoe UI, Arial', 'center');
 
         if (!unlocked) {
           // Покупка под персонажем — price.png как рамка
@@ -2975,7 +3112,7 @@
             if (isImageReady(goldImg)) {
               ctx.drawImage(goldImg, buyX + 16 + sx, buyY + 5 + sy, 18, 18);
             }
-            ctx.fillStyle = canAfford ? '#fff' : '#bbb';
+            ctx.fillStyle = TEXT_COL;
             ctx.font = 'bold 11px Segoe UI';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
@@ -3004,7 +3141,7 @@
         if (isImageReady(img)) {
           drawSprite(img, bx + btnSize / 2, by + btnSize / 2, btnSize, btnSize);
         } else {
-          ctx.fillStyle = '#fff';
+          ctx.fillStyle = TEXT_COL;
           ctx.font = 'bold 12px Segoe UI';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -3035,13 +3172,7 @@
         const ph = 210;
         const px = (WIDTH - pw) / 2;
         const py = (HEIGHT - ph) / 2 - 20;
-        ctx.fillStyle = 'rgba(26, 28, 46, 0.97)';
-        roundRect(px, py, pw, ph, 18);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1.5;
-        roundRect(px, py, pw, ph, 18);
-        ctx.stroke();
+        drawMenuPanelBg(px, py, pw, ph, 18);
 
         // Аватар
         const av = 56;
@@ -3053,18 +3184,18 @@
           ctx.drawImage(img, px + 20 + (av - dw) / 2, py + 18 + (av - dh) / 2, dw, dh);
         }
 
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = 'bold 22px Segoe UI, Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(info.name, px + 20 + av + 14, py + 30);
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '12px Segoe UI, Arial';
         ctx.fillText(info.label, px + 20 + av + 14, py + 52);
         ctx.textBaseline = 'alphabetic';
 
         // Описание
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '14px Segoe UI, Arial';
         const lines = wrapText(info.desc, pw - 40);
         let ty = py + 90;
@@ -3080,7 +3211,7 @@
         ctx.beginPath();
         ctx.arc(cx, cy, 14, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = 'bold 16px Segoe UI';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -3128,10 +3259,7 @@
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
       const titles = { levels: 'Уровни', missions: 'Задания', settings: 'Настройки' };
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 22px Segoe UI, Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(titles[titleMenu] || '', WIDTH / 2, py + 36);
+      drawMenuTitle(titles[titleMenu] || '', WIDTH / 2, py + 36, 220, 48);
 
       // Закрыть
       const cx = pw - 28;
@@ -3140,7 +3268,7 @@
       ctx.beginPath();
       ctx.arc(cx, cy, 14, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = TEXT_COL;
       ctx.font = 'bold 16px Segoe UI';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -3160,8 +3288,8 @@
         const gx0 = (WIDTH - gridW) / 2;
         const rows = Math.ceil(100 / cols);
         const contentH = rows * (cellH + gap);
-        const viewTop = py + 56;
-        const viewH = ph - 72;
+        const viewTop = py + 71; // +15 px ниже
+        const viewH = ph - 87;
         levelScrollMax = Math.max(0, contentH - viewH);
         levelScrollY = Math.max(0, Math.min(levelScrollMax, levelScrollY));
 
@@ -3202,14 +3330,19 @@
             roundRect(gx, gy2, cellW, cellH, 8);
             ctx.fill();
           }
-          ctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
           ctx.font = 'bold 20px Segoe UI, Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(0,0,0,0.55)';
-          ctx.shadowBlur = 4;
-          ctx.fillText(String(n), gx + cellW / 2, gy2 + cellH / 2);
-          ctx.shadowBlur = 0;
+          const numX = gx + cellW / 2;
+          const numY = gy2 + cellH / 2;
+          // мягкая обводка цветом текста, заливка белая
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          ctx.strokeStyle = TEXT_COL;
+          ctx.lineWidth = 3.5;
+          ctx.strokeText(String(n), numX, numY);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(String(n), numX, numY);
           ctx.textBaseline = 'alphabetic';
           if (done && isImageReady(completeImg)) {
             const cs = Math.floor(cellS * 0.38);
@@ -3231,7 +3364,7 @@
           roundRect(px + pw - 10, barY, 4, barH, 2);
           ctx.fill();
         }
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '11px Segoe UI';
         ctx.textAlign = 'center';
         ctx.fillText('свайп ↑↓', WIDTH / 2, py + ph - 14);
@@ -3253,8 +3386,8 @@
         const rowH = 88;
         const scrollW = pw - 24;
         const scrollH = rowH - 6;
-        const viewTop = py + 48;
-        const viewH = ph - 100;
+        const viewTop = py + 63; // +15 px ниже
+        const viewH = ph - 115;
         const contentH = sorted.length * rowH;
         missionScrollMax = Math.max(0, contentH - viewH);
         missionScrollY = Math.max(0, Math.min(missionScrollMax, missionScrollY));
@@ -3290,7 +3423,7 @@
           }
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = done ? 'rgba(40,30,20,0.65)' : 'rgba(40,25,10,0.85)';
+          ctx.fillStyle = TEXT_COL;
           ctx.font = 'bold 13px Segoe UI';
           let title = m.text;
           const maxTw = scrollW - 100;
@@ -3300,20 +3433,20 @@
           }
           ctx.fillText(title, midX, my + scrollH * 0.32);
           ctx.font = '12px Segoe UI';
-          ctx.fillStyle = 'rgba(50,35,20,0.75)';
+          ctx.fillStyle = TEXT_COL;
           ctx.fillText(Math.min(progress, m.need) + '/' + m.need + ' · монеты ×' + m.reward, midX, my + scrollH * 0.52);
           const rollLineY = my + scrollH * 0.72;
           if (isImageReady(rollImg)) {
             ctx.drawImage(rollImg, midX - 36, rollLineY - 9, 18, 18);
           }
-          ctx.fillStyle = 'rgba(120,30,30,0.9)';
+          ctx.fillStyle = TEXT_COL;
           ctx.font = 'bold 12px Segoe UI';
           ctx.textAlign = 'left';
           ctx.fillText('+1000', midX - 14, rollLineY + 1);
           ctx.textBaseline = 'alphabetic';
 
           if (done) {
-            ctx.fillStyle = '#2e7d32';
+            ctx.fillStyle = TEXT_COL;
             ctx.font = 'bold 14px Segoe UI';
             ctx.textAlign = 'right';
             ctx.fillText('✓', sx0 + scrollW - 24, my + scrollH / 2);
@@ -3323,15 +3456,7 @@
             const claimH = Math.round(28 * 0.7);
             const claimX = sx0 + scrollW - 100;
             const claimY = my + scrollH / 2 - claimH / 2;
-            ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
-            roundRect(claimX, claimY, claimW, claimH, 7);
-            ctx.fill();
-            ctx.fillStyle = '#1a1a2e';
-            ctx.font = 'bold 11px Segoe UI';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('Забрать', claimX + claimW / 2, claimY + claimH / 2);
-            ctx.textBaseline = 'alphabetic';
+            drawKeycapBtn(claimX, claimY, claimW, claimH, 'Забрать', '#783915');
             titleLayout._menuHits.push({
               type: 'claim', id: m.id, reward: m.reward,
               x: claimX, y: claimY, w: claimW, h: claimH
@@ -3353,19 +3478,11 @@
         const claimable = sorted.filter(s => s.ready);
         const claimAllY = py + ph - 42;
         if (claimable.length > 0) {
-          ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
-          roundRect(px + 40, claimAllY, pw - 80, 30, 10);
-          ctx.fill();
-          ctx.fillStyle = '#1a1a2e';
-          ctx.font = 'bold 13px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
           const sum = claimable.reduce((s, c) => s + c.m.reward, 0);
-          ctx.fillText('Забрать все (' + claimable.length + ') · ×' + sum, WIDTH / 2, claimAllY + 15);
-          ctx.textBaseline = 'alphabetic';
-          titleLayout._menuHits.push({ type: 'claimAll', x: px + 40, y: claimAllY, w: pw - 80, h: 30 });
+          drawKeycapBtn(px + 40, claimAllY, pw - 80, 34, 'Забрать все (' + claimable.length + ') · ×' + sum, '#783915');
+          titleLayout._menuHits.push({ type: 'claimAll', x: px + 40, y: claimAllY, w: pw - 80, h: 34 });
         }
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '11px Segoe UI';
         ctx.textAlign = 'center';
         if (claimable.length === 0) ctx.fillText('свайп ↑↓', WIDTH / 2, py + ph - 16);
@@ -3374,7 +3491,7 @@
       if (titleMenu === 'settings') {
         // Музыка вкл
         let sy = py + 70;
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '15px Segoe UI';
         ctx.textAlign = 'left';
         ctx.fillText('Музыка', px + 28, sy);
@@ -3392,17 +3509,17 @@
         titleLayout._menuHits.push({ type: 'slSfx', x: px + 28, y: sy + 6, w: pw - 56, h: 28 });
 
         sy += 55;
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillStyle = TEXT_COL;
         ctx.font = '12px Segoe UI';
         ctx.fillText('Коды: monstergold · monsterall · monsterdell · openall', px + 28, sy);
       }
     }
 
     function drawToggle(x, y, on) {
-      ctx.fillStyle = on ? '#4ecdc4' : 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = TEXT_COL;
       roundRect(x, y, 40, 22, 11);
       ctx.fill();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = TEXT_COL;
       ctx.beginPath();
       ctx.arc(on ? x + 28 : x + 12, y + 11, 8, 0, Math.PI * 2);
       ctx.fill();
@@ -3415,7 +3532,7 @@
       ctx.fillStyle = '#4ecdc4';
       roundRect(x, y + 6, w * Math.max(0, Math.min(1, val)), 8, 4);
       ctx.fill();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = TEXT_COL;
       ctx.beginPath();
       ctx.arc(x + w * Math.max(0, Math.min(1, val)), y + 10, 9, 0, Math.PI * 2);
       ctx.fill();
@@ -3450,7 +3567,7 @@
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
       const progress = assetsTotal > 0 ? assetsLoaded / assetsTotal : 0;
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = TEXT_COL;
       ctx.font = 'bold 22px Segoe UI, Arial';
       ctx.textAlign = 'center';
       ctx.fillText('Загрузка...', WIDTH / 2, HEIGHT / 2 - 30);
@@ -3518,7 +3635,7 @@
         roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 6);
         ctx.fill();
 
-        ctx.fillStyle = '#FFD700';
+        ctx.fillStyle = TEXT_COL;
         roundRect(barX, barY, barW * progress, barH, 4);
         ctx.fill();
       }
@@ -3534,54 +3651,37 @@
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        // Панель
-        const panelW = 260;
-        const panelH = 200;
+        // Панель — backgroundmenu.png
+        const panelW = 280;
+        const panelH = 220;
         const panelX = (WIDTH - panelW) / 2;
         const panelY = (HEIGHT - panelH) / 2 - 20;
-        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
-        roundRect(panelX, panelY, panelW, panelH, 20);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1.5;
-        roundRect(panelX, panelY, panelW, panelH, 20);
-        ctx.stroke();
+        drawMenuPanelBg(panelX, panelY, panelW, panelH, 20);
 
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 32px Segoe UI, Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('ПАУЗА', WIDTH / 2, panelY + 48);
+        drawMenuTitle('ПАУЗА', WIDTH / 2, panelY + 42, 200, 48);
 
-        // Кнопка «Продолжить»
+        // Кнопки: Меню сверху, Продолжить снизу
         const btnW = 200;
-        const btnH = 44;
+        const btnH = 48;
         const contX = (WIDTH - btnW) / 2;
-        const contY = panelY + 80;
-        ctx.fillStyle = '#4ecdc4';
-        roundRect(contX, contY, btnW, btnH, 22);
-        ctx.fill();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.font = 'bold 18px Segoe UI, Arial';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Продолжить', WIDTH / 2, contY + btnH / 2);
-
-        // Кнопка «Меню»
-        const menuY = contY + btnH + 14;
-        ctx.fillStyle = 'rgba(92, 107, 192, 0.95)';
-        roundRect(contX, menuY, btnW, btnH, 22);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText('Меню', WIDTH / 2, menuY + btnH / 2);
-        ctx.textBaseline = 'alphabetic';
+        const menuY = panelY + 80;
+        drawKeycapBtn(contX, menuY, btnW, btnH, 'Меню', TEXT_COL);
+        const contY = menuY + btnH + 12;
+        drawKeycapBtn(contX, contY, btnW, btnH, 'Продолжить', TEXT_COL);
 
         // Hitbox для кликов
-        pauseMenuBtns.continue = { x: contX, y: contY, w: btnW, h: btnH };
         pauseMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
+        pauseMenuBtns.continue = { x: contX, y: contY, w: btnW, h: btnH };
       }
 
-      // Экран «Уровень пройден»
-      if (gameState === 'levelwin') {
+      // Экран «Уровень пройден» (после взлёта)
+      if (gameState === 'levelwin' && levelWinAnim !== 'fly') {
         drawLevelWinScreen();
+      }
+
+      // Меню проигрыша — canvas, цвет TEXT_COL как везде
+      if (gameState === 'gameover') {
+        drawGameOverScreen();
       }
 
       // Эффект проигрыша — затемнение + красная вспышка (без текста)
@@ -3601,6 +3701,58 @@
       vignette.addColorStop(1, 'rgba(0,0,0,0.15)');
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    function drawGameOverScreen() {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      const panelW = 300;
+      const panelH = 280;
+      const panelX = (WIDTH - panelW) / 2;
+      const panelY = (HEIGHT - panelH) / 2 - 16;
+      drawMenuPanelBg(panelX, panelY, panelW, panelH, 22);
+
+      // −10 px с каждой стороны (было 270 → 250)
+      drawMenuTitle('Попробовать еще раз?', WIDTH / 2, panelY + 40, 250, 48);
+
+      // Иконки + текст — общий блок по центру
+      const iconS = 28;
+      const rowGap = 36;
+      const rowY1 = panelY + 102;
+      const rowY2 = rowY1 + rowGap;
+      ctx.font = 'bold 20px Segoe UI, Arial';
+      const scoreStr = '× ' + score + ' m';
+      const coinStr = '× ' + runCoins;
+      const textW = Math.max(ctx.measureText(scoreStr).width, ctx.measureText(coinStr).width);
+      const blockW = iconS + 10 + textW;
+      const blockX = WIDTH / 2 - blockW / 2;
+
+      if (isImageReady(liderImg)) {
+        ctx.drawImage(liderImg, blockX, rowY1 - iconS / 2, iconS, iconS);
+      }
+      if (isImageReady(goldImg)) {
+        ctx.drawImage(goldImg, blockX, rowY2 - iconS / 2, iconS, iconS);
+      }
+      ctx.fillStyle = TEXT_COL;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(scoreStr, blockX + iconS + 10, rowY1);
+      ctx.fillText(coinStr, blockX + iconS + 10, rowY2);
+      ctx.textBaseline = 'alphabetic';
+
+      // Кнопки — в одну линию по центру, равные
+      const btnW = 118;
+      const btnH = 48;
+      const gap = 14;
+      const pairW = btnW * 2 + gap;
+      const menuX = WIDTH / 2 - pairW / 2;
+      const retryX = menuX + btnW + gap;
+      const btnY = panelY + 198;
+      drawKeycapBtn(menuX, btnY, btnW, btnH, 'Меню', TEXT_COL);
+      drawKeycapBtn(retryX, btnY, btnW, btnH, 'Повторить', TEXT_COL);
+      gameOverMenuBtns.menu = { x: menuX, y: btnY, w: btnW, h: btnH };
+      gameOverMenuBtns.retry = { x: retryX, y: btnY, w: btnW, h: btnH };
     }
 
     function drawLevelWinScreen() {
@@ -3628,7 +3780,7 @@
       }
 
       const panelW = 300;
-      const panelH = 260;
+      const panelH = 320;
       const panelX = (WIDTH - panelW) / 2;
       const panelY = (HEIGHT - panelH) / 2 - 20;
 
@@ -3638,69 +3790,59 @@
       ctx.translate(-WIDTH / 2, -(HEIGHT / 2 - 10));
       ctx.globalAlpha = alpha;
 
-      const pulse = levelWinAnim === 'idle' ? (0.5 + 0.5 * Math.sin(levelWinTimer * 0.12)) : 0.5;
-      ctx.save();
-      ctx.shadowColor = `rgba(78, 205, 196, ${0.35 + pulse * 0.35})`;
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = 'rgba(26, 28, 50, 0.96)';
-      roundRect(panelX, panelY, panelW, panelH, 22);
-      ctx.fill();
-      ctx.restore();
-      ctx.strokeStyle = `rgba(78, 205, 196, ${0.5 + pulse * 0.4})`;
-      ctx.lineWidth = 2.5;
-      roundRect(panelX, panelY, panelW, panelH, 22);
-      ctx.stroke();
+      drawMenuPanelBg(panelX, panelY, panelW, panelH, 22);
 
-      ctx.fillStyle = '#FFD700';
-      ctx.font = 'bold 26px Segoe UI, Arial';
+      drawMenuTitle('Уровень пройден!', WIDTH / 2, panelY + 42, 260, 48);
+
+      ctx.fillStyle = TEXT_COL;
+      ctx.font = 'bold 36px Segoe UI, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Уровень пройден!', WIDTH / 2, panelY + 48);
+      ctx.fillText(String(levelWinLevel), WIDTH / 2, panelY + 92);
 
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 40px Segoe UI, Arial';
-      ctx.fillText(String(levelWinLevel), WIDTH / 2, panelY + 100);
-
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = '14px Segoe UI, Arial';
-      ctx.fillText('+' + (50 + levelWinLevel) + ' монет · +5000 💎 · ' + score + ' m', WIDTH / 2, panelY + 130);
-
-      // Кнопки Home | Next
-      const btnS = 64;
-      const gap = 28;
-      const homeX = WIDTH / 2 - btnS - gap / 2;
-      const nextX = WIDTH / 2 + gap / 2;
-      const btnY = panelY + 160;
-
-      function drawWinBtn(img, x, y, label) {
-        ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        roundRect(x, y, btnS, btnS, 14);
-        ctx.fill();
-        if (isImageReady(img)) {
-          drawSprite(img, x + btnS / 2, y + btnS / 2, btnS - 12, btnS - 12);
-        } else {
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 11px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, x + btnS / 2, y + btnS / 2);
-          ctx.textBaseline = 'alphabetic';
-        }
+      // Награды вертикально: кристаллы → монеты → высота
+      const rewardCoins = 50 + levelWinLevel;
+      const rewardCrystals = 5000;
+      const rewardHeight = score;
+      const iconS = 28;
+      const rowH = 34;
+      let rowY = panelY + 118;
+      ctx.font = 'bold 17px Segoe UI, Arial';
+      const parts = [
+        { img: isImageReady(crystalImg) ? crystalImg : null, text: '× ' + rewardCrystals },
+        { img: isImageReady(goldImg) ? goldImg : null, text: '× ' + rewardCoins },
+        { img: isImageReady(liderImg) ? liderImg : null, text: '× ' + rewardHeight + ' m' }
+      ];
+      for (const p of parts) {
+        const tw = ctx.measureText(p.text).width;
+        const blockW = iconS + 10 + tw;
+        const bx = WIDTH / 2 - blockW / 2;
+        if (p.img) ctx.drawImage(p.img, bx, rowY - iconS / 2, iconS, iconS);
+        ctx.fillStyle = TEXT_COL;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.text, bx + iconS + 10, rowY);
+        rowY += rowH;
       }
-      drawWinBtn(homeImg, homeX, btnY, 'HOME');
-      drawWinBtn(nextImg, nextX, btnY, 'NEXT');
+      ctx.textBaseline = 'alphabetic';
 
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = '11px Segoe UI';
-      ctx.textAlign = 'center';
-      ctx.fillText('Домой', homeX + btnS / 2, btnY + btnS + 16);
-      ctx.fillText(levelWinLevel >= 100 ? 'Финиш' : 'Далее', nextX + btnS / 2, btnY + btnS + 16);
+      // Кнопки как в паузе: Меню | Продолжить
+      const btnW = 118;
+      const btnH = 48;
+      const gap = 14;
+      const pairW = btnW * 2 + gap;
+      const homeX = WIDTH / 2 - pairW / 2;
+      const nextX = homeX + btnW + gap;
+      const btnY = panelY + 240;
+
+      drawKeycapBtn(homeX, btnY, btnW, btnH, 'Меню', TEXT_COL);
+      drawKeycapBtn(nextX, btnY, btnW, btnH, levelWinLevel >= 100 ? 'Финиш' : 'Продолжить', TEXT_COL);
 
       ctx.restore(); // конец scale из центра
 
       // Hitbox только когда окно полностью открыто
       if (levelWinAnim === 'idle') {
-        levelWinBtns.home = { x: homeX, y: btnY, w: btnS, h: btnS };
-        levelWinBtns.next = { x: nextX, y: btnY, w: btnS, h: btnS };
+        levelWinBtns.home = { x: homeX, y: btnY, w: btnW, h: btnH };
+        levelWinBtns.next = { x: nextX, y: btnY, w: btnW, h: btnH };
       } else {
         levelWinBtns.home = null;
         levelWinBtns.next = null;
@@ -3724,12 +3866,7 @@
       const totalIcon = isImageReady(allgoldImg) ? allgoldImg : goldImg;
       drawSprite(totalIcon, leftX + 6 + iconSize / 2, topY + barH / 2, iconSize, iconSize);
 
-      ctx.fillStyle = '#FFE082';
-      ctx.font = 'bold 16px Segoe UI, Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('× ' + totalCoins, leftX + iconSize + 12, topY + barH / 2);
-      ctx.textBaseline = 'alphabetic';
+      drawOutlinedText('× ' + totalCoins, leftX + iconSize + 12, topY + barH / 2, 'bold 16px Segoe UI, Arial', 'left');
 
       // --- Центр: рекорд + текущий (та же высота и линия) ---
       const scoreW = 150;
@@ -3738,21 +3875,11 @@
       roundRect(scoreX, topY, scoreW, barH, 8);
       ctx.fill();
 
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      // Рекорд сверху в рамке
       if (isImageReady(liderImg)) {
         drawSprite(liderImg, scoreX + 20, topY + 16, 20, 20);
       }
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 16px Segoe UI, Arial';
-      ctx.fillText(bestScore + ' m', scoreX + scoreW / 2 + 8, topY + 16);
-      // Текущий счёт снизу в той же рамке
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = '13px Segoe UI, Arial';
-      ctx.fillText(score + ' m', scoreX + scoreW / 2, topY + 34);
-      ctx.textBaseline = 'alphabetic';
-      ctx.textAlign = 'left';
+      drawOutlinedText(bestScore + ' m', scoreX + scoreW / 2 + 8, topY + 16, 'bold 16px Segoe UI, Arial', 'center');
+      drawOutlinedText(score + ' m', scoreX + scoreW / 2, topY + 34, 'bold 13px Segoe UI, Arial', 'center');
 
       // --- Бонусы ниже верхней линии ---
       drawBonusShop(leftX, topY + barH + 10);
@@ -3774,7 +3901,7 @@
       function drawBonusCell(which, img, count) {
         const cellX = colX;
         const cd = which === 1 ? cdBonus1 : (which === 2 ? cdBonus2 : cdBonus3);
-        const busy = (which === 1 && bonusActive) || (which === 2 && extraLifeReady) || (which === 3 && jumpBoostTimer > 0);
+        const busy = (which === 1 && (bonusActive || bonus1Pending)) || (which === 2 && (extraLifeReady || bonus2CdPending)) || (which === 3 && jumpBoostTimer > 0);
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         roundRect(cellX, y, cellW, cellH, 10);
         ctx.fill();
@@ -3800,21 +3927,11 @@
           ctx.lineCap = 'round';
           ctx.arc(cx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
           ctx.stroke();
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 12px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(Math.ceil(cd / 60)), cx, cy);
-          ctx.textBaseline = 'alphabetic';
+          drawOutlinedText(String(Math.ceil(cd / 60)), cx, cy, 'bold 12px Segoe UI', 'center');
         }
 
         // Количество в правом нижнем углу рамки
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 11px Segoe UI';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('×' + count, cellX + cellW - 5, y + cellH - 4);
-        ctx.textBaseline = 'alphabetic';
+        drawOutlinedText('×' + count, cellX + cellW - 5, y + cellH - 6, 'bold 11px Segoe UI', 'right');
         const useBox = { x: cellX, y: y, w: cellW, h: cellH };
         if (which === 1) shopHit.b1 = useBox;
         else if (which === 2) shopHit.b2 = useBox;
@@ -3832,12 +3949,7 @@
         roundRect(bx, y, buyW, buyH, 8);
         ctx.stroke();
         drawSprite(goldImg, bx + 11, y + buyH / 2, 14, 14);
-        ctx.fillStyle = totalCoins >= price ? '#FFE082' : '#ff8a80';
-        ctx.font = 'bold 11px Segoe UI';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('×' + price, bx + 20, y + buyH / 2);
-        ctx.textBaseline = 'alphabetic';
+        drawOutlinedText('×' + price, bx + 20, y + buyH / 2, 'bold 11px Segoe UI', 'left');
         const buyBox = { x: bx, y: y, w: buyW, h: buyH };
         if (which === 1) shopHit.buy1 = buyBox;
         else if (which === 2) shopHit.buy2 = buyBox;
@@ -4154,9 +4266,24 @@
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
 
+      // Меню проигрыша (canvas)
+      if (gameState === 'gameover') {
+        const m = gameOverMenuBtns.menu;
+        const r = gameOverMenuBtns.retry;
+        if (m && mx >= m.x && mx <= m.x + m.w && my >= m.y && my <= m.y + m.h) {
+          goToMenu();
+          return;
+        }
+        if (r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+          retryGame();
+          return;
+        }
+        return;
+      }
+
       // Меню победы на уровне — плавное закрытие, затем действие
       if (gameState === 'levelwin') {
-        if (levelWinAnim !== 'idle') return;
+        if (levelWinAnim !== 'idle') return; // fly / in / out — без кликов
         const h = levelWinBtns.home;
         const n = levelWinBtns.next;
         if (h && mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
@@ -4226,20 +4353,40 @@
     canvas.addEventListener('click', e => {
       if (gameState === 'title') {
         handleTitleClick(e.clientX, e.clientY);
-      } else if (gameState === 'playing' || gameState === 'levelwin') {
+      } else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') {
         handleGameClick(e.clientX, e.clientY);
       }
     });
 
     canvas.addEventListener('touchend', e => {
-      if (e.changedTouches.length === 0) return;
-      const t = e.changedTouches[0];
-      if (gameState === 'title') {
-        e.preventDefault();
-        handleTitleClick(t.clientX, t.clientY);
-      } else if (gameState === 'playing' || gameState === 'levelwin') {
-        handleGameClick(t.clientX, t.clientY);
+      if (levelDrag) {
+        levelDidScroll = !!levelDrag.moved;
+        levelDrag = null;
       }
+      if (missionDrag) {
+        missionDidScroll = !!missionDrag.moved;
+        missionDrag = null;
+      }
+      if (e.changedTouches.length > 0) {
+        const t = e.changedTouches[0];
+        if (gameState === 'title') {
+          e.preventDefault();
+          handleTitleClick(t.clientX, t.clientY);
+        } else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') {
+          e.preventDefault();
+          handleGameClick(t.clientX, t.clientY);
+        }
+      }
+      touchX = null;
+      touchY = null;
+      setTimeout(() => {
+        if (touchX === null) {
+          keys.left = false;
+          keys.right = false;
+          keys.up = false;
+          keys.down = false;
+        }
+      }, 90);
     }, { passive: false });
 
     // Клавиша P / Escape — пауза
