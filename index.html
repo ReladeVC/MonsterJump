@@ -356,17 +356,17 @@
       {
         name: 'Brutus',
         price: 70000, unlock: 'coins', label: 'Прочный',
-        desc: 'Не ломает разрушающиеся платформы. Замедление падения — только от прокачки уровня.'
+        desc: 'Тяжёлый боец: разрушающиеся платформы выдерживают его прыжки и не ломаются. Надёжный выбор для сложных участков.'
       },
       {
         name: 'Luma',
-        price: 140000, unlock: 'coins', label: 'Стоять · прыжок',
-        desc: 'Монеты ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше. Замедление падения — от прокачки.'
+        price: 140000, unlock: 'coins', label: 'Стоп платформ',
+        desc: 'Монеты ×2. Одним касанием останавливает движущиеся платформы — они замирают, и по ним можно прыгать как по обычным.'
       },
       {
         name: 'Hex',
         price: 280000, unlock: 'coins', label: 'Все силы',
-        desc: 'Все способности: запасная жизнь, магнит, монеты ×2. Замедление падения — только от прокачки уровня.'
+        desc: 'Легенда арены: запасная жизнь, магнит к монетам и удвоение золота. Все ключевые силы в одном персонаже.'
       }
     ];
     let charInfoPopup = -1; // индекс персонажа для окна способностей, -1 = закрыто
@@ -398,9 +398,9 @@
     function hasSafeBreak() {
       return selectedCharacter === 3;
     }
-    // 5-й персонаж (Luma): может стоять на платформах
-    function hasStandAbility() {
-      return selectedCharacter === 4; // только 5-й (Luma)
+    // 5-й персонаж (Luma): останавливает движущиеся платформы при приземлении
+    function hasMovingFreezeAbility() {
+      return selectedCharacter === 4;
     }
 
     const SECRET_CODES = {
@@ -509,7 +509,7 @@
       totalCrystals -= CHAR_UPGRADE_COST;
       charLevels[i] = Math.min(99, cur + 1);
       saveProgress();
-      playBonusSound();
+      playLevelUpSound();
       return true;
     }
 
@@ -826,8 +826,10 @@
     const BONUS_SCALE = 2;
     const BONUS_FLY_FORCE = -9.5; // полёт во время бонуса
     let bonusVisualScale = 1;  // плавное появление/исчезновение размера
-    const BONUS_SCALE_SPEED = 0.06; // скорость анимации масштаба
-    let bonus1Pending = false; // нажат, ждёт касания платформы
+    const BONUS_SCALE_SPEED = 0.04; // плавнее scale
+    let playerTilt = 0; // сглаженный наклон
+    let bonus1Pending = false; // нажат / подобран, ждёт касания платформы
+    let bonusesLockedUntilLand = false; // после спасения — бонусы только после платформы
     let bonus1TargetY = 0; // целевая высота (ровно +500 m)
     const BONUS1_METERS = 500;
     const BONUS1_WORLD = BONUS1_METERS * 10; // 1 m = 10 px
@@ -866,6 +868,7 @@
     let currentLevel = 0; // 0 = endless, 1..100 = уровень
     let levelTarget = 0;
     let levelWinLevel = 0; // какой уровень только что пройден
+    let levelWinFirstClear = true;
     let levelWinTimer = 0;
     let levelWinBtns = { home: null, next: null };
     let levelWinAnim = 'in'; // 'fly' | 'in' | 'idle' | 'out'
@@ -1218,12 +1221,38 @@
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
-        // Мощный power-up аккорд вверх
         [0, 0.07, 0.14, 0.22].forEach((d, i) => {
           const f = 360 + i * 160;
           playTone(ctx, now, { type: 'sine', freq: f, freqEnd: f * 1.45, dur: 0.2, vol: 0.16 - i * 0.02, delay: d, filterFreq: 3500 });
           playTone(ctx, now, { type: 'triangle', freq: f * 0.5, freqEnd: f * 0.7, dur: 0.22, vol: 0.08, delay: d, filterFreq: 1500 });
         });
+      } catch (e) {}
+    }
+
+    // Звук прохождения уровня
+    function playLevelWinSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+        notes.forEach((f, i) => {
+          playTone(ctx, now, { type: 'sine', freq: f, freqEnd: f * 1.02, dur: 0.28, vol: 0.14, delay: i * 0.09, filterFreq: 4000 });
+          playTone(ctx, now, { type: 'triangle', freq: f * 0.5, freqEnd: f * 0.5, dur: 0.3, vol: 0.06, delay: i * 0.09, filterFreq: 2000 });
+        });
+        playTone(ctx, now, { type: 'sine', freq: 1318.5, freqEnd: 1568, dur: 0.45, vol: 0.1, delay: 0.4, filterFreq: 5000 });
+      } catch (e) {}
+    }
+
+    // Звук повышения уровня персонажа
+    function playLevelUpSound() {
+      try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        // Короткий яркий «level up»
+        [440, 554, 659, 880].forEach((f, i) => {
+          playTone(ctx, now, { type: 'square', freq: f, freqEnd: f * 1.08, dur: 0.12, vol: 0.07 - i * 0.008, delay: i * 0.055, filterFreq: 2800 });
+        });
+        playTone(ctx, now, { type: 'sine', freq: 1175, freqEnd: 1319, dur: 0.35, vol: 0.12, delay: 0.22, filterFreq: 4500 });
       } catch (e) {}
     }
 
@@ -1410,6 +1439,7 @@
       bonusTimer = 0;
       bonusVisualScale = 1;
       bonus1Pending = false;
+      bonusesLockedUntilLand = false;
       runCoins = 0;
 
       platforms.push({
@@ -1538,7 +1568,7 @@
 
     // bonus.png — нажатие ставит «в ожидание», активация после касания платформы
     function useBonus1() {
-      if (invBonus1 <= 0 || bonusActive || bonus1Pending || cdBonus1 > 0 || gameState !== 'playing' || isPaused) return false;
+      if (invBonus1 <= 0 || bonusActive || bonus1Pending || bonusesLockedUntilLand || cdBonus1 > 0 || gameState !== 'playing' || isPaused) return false;
       invBonus1--;
       saveProgress();
       bonus1Pending = true;
@@ -1561,7 +1591,7 @@
 
     // bonus2.png — защита; CD только после срабатывания + касания платформы
     function useBonus2() {
-      if (invBonus2 <= 0 || cdBonus2 > 0 || bonus2CdPending || gameState !== 'playing' || isPaused) return false;
+      if (invBonus2 <= 0 || cdBonus2 > 0 || bonus2CdPending || bonusesLockedUntilLand || gameState !== 'playing' || isPaused) return false;
       if (extraLifeReady) return false;
       invBonus2--;
       saveProgress();
@@ -1575,7 +1605,7 @@
 
     // bonus3.png — удвоенные прыжки 5 сек; CD после окончания
     function useBonus3() {
-      if (invBonus3 <= 0 || jumpBoostTimer > 0 || cdBonus3 > 0 || gameState !== 'playing' || isPaused) return false;
+      if (invBonus3 <= 0 || jumpBoostTimer > 0 || bonusesLockedUntilLand || cdBonus3 > 0 || gameState !== 'playing' || isPaused) return false;
       invBonus3--;
       saveProgress();
       jumpBoostTimer = JUMP_BOOST_DURATION;
@@ -1957,44 +1987,40 @@
       // --- Бонус-эффект ---
       if (bonusActive) {
         bonusTimer--;
-        spawnBonusParticles();
-        // Скорость так, чтобы за оставшееся время долететь ровно до +500 m
+        if (bonusTimer % 3 === 0) spawnBonusParticles();
+        // Ровная скорость к цели +500 m (без дёрганий от смешивания)
         const remainY = player.y - bonus1TargetY;
         if (bonusTimer > 0 && remainY > 0) {
-          // Плавный разгон по scale, но с коррекцией к цели
-          const scaleProgress = Math.max(0.15, Math.min(1, (bonusVisualScale - 1) / (BONUS_SCALE - 1)));
-          const needVy = -(remainY / bonusTimer);
-          const baseVy = -(BONUS1_WORLD / BONUS_DURATION);
-          player.vy = (baseVy * scaleProgress) * 0.35 + needVy * 0.65;
+          const needVy = -(remainY / Math.max(1, bonusTimer));
+          // Мягкое сглаживание vy
+          player.vy += (needVy - player.vy) * 0.35;
         }
         if (bonusTimer <= 0) {
-          // Доводим до цели и заканчиваем
           if (player.y > bonus1TargetY) player.y = bonus1TargetY;
-          player.vy = Math.min(player.vy, -1);
+          player.vy = Math.min(player.vy, -0.5);
           bonusActive = false;
           cdBonus1 = ABILITY_COOLDOWN;
         }
       }
-      // Плавный scale из центра: рост при бонусе, уменьшение после
+      // Плавный scale (ease к цели)
       const scaleTarget = bonusActive ? BONUS_SCALE : 1;
-      if (bonusVisualScale < scaleTarget) {
-        bonusVisualScale = Math.min(scaleTarget, bonusVisualScale + BONUS_SCALE_SPEED);
-      } else if (bonusVisualScale > scaleTarget) {
-        bonusVisualScale = Math.max(scaleTarget, bonusVisualScale - BONUS_SCALE_SPEED);
-      }
+      bonusVisualScale += (scaleTarget - bonusVisualScale) * 0.12;
+      if (Math.abs(bonusVisualScale - scaleTarget) < 0.008) bonusVisualScale = scaleTarget;
       updateParticles();
       updateShield();
 
-      // Горизонтальное движение (работает и во время бонуса)
-      if (keys.left) {
-        player.vx = -MOVE_SPEED;
-        player.facing = -1;
-      } else if (keys.right) {
-        player.vx = MOVE_SPEED;
-        player.facing = 1;
-      } else {
-        player.vx *= 0.85;
+      // Горизонтальное движение — плавный разгон / торможение
+      {
+        let targetVx = 0;
+        if (keys.left) { targetVx = -MOVE_SPEED; player.facing = -1; }
+        else if (keys.right) { targetVx = MOVE_SPEED; player.facing = 1; }
+        const accel = (bonusActive || bonusVisualScale > 1.05) ? 0.22 : 0.35;
+        player.vx += (targetVx - player.vx) * accel;
+        if (Math.abs(player.vx) < 0.08 && targetVx === 0) player.vx = 0;
       }
+      // сглаженный наклон
+      const tiltTarget = Math.max(-0.22, Math.min(0.22, player.vx * 0.035));
+      playerTilt += (tiltTarget - playerTilt) * 0.2;
 
       player.x += player.vx;
 
@@ -2015,14 +2041,21 @@
 
       if (invincibleTimer > 0) invincibleTimer--;
 
-      // Камера следует за игроком вверх
-      if (player.y < cameraY + HEIGHT * 0.4) {
-        cameraY = player.y - HEIGHT * 0.4;
+      // Камера следует вверх (плавно при бонусе, иначе точно)
+      {
+        const targetCam = player.y - HEIGHT * 0.4;
+        if (player.y < cameraY + HEIGHT * 0.4) {
+          if (bonusActive || bonusVisualScale > 1.02) {
+            cameraY += (targetCam - cameraY) * 0.18;
+          } else {
+            cameraY = targetCam;
+          }
+        }
       }
 
       // Обновление платформ
       for (let p of platforms) {
-        if (p.type === 'moving' && !p.broken) {
+        if (p.type === 'moving' && !p.broken && !p.frozen) {
           const prevX = p.x;
           p.x += p.dir * p.speed;
           if (p.x <= 0) { p.x = 0; p.dir = 1; }
@@ -2053,8 +2086,8 @@
         }
       }
 
-      // Коллизии с бонусами (не подбираем новые во время действия бонуса)
-      if (!bonusActive) {
+      // Коллизии с бонусами (не подбираем во время бонуса / pending / до приземления после спасения)
+      if (!bonusActive && !bonus1Pending && !bonusesLockedUntilLand) {
         for (let b of bonuses) {
           if (b.collected) continue;
           if (player.x < b.x + b.width &&
@@ -2062,10 +2095,11 @@
               player.y < b.y + b.height &&
               player.y + player.height > b.y) {
             b.collected = true;
-            bonusActive = true;
-            bonusTimer = BONUS_DURATION;
-            bonus1TargetY = player.y - BONUS1_WORLD;
-            playBonusSound();
+            // Как купленный бонус 1: взлёт только после касания платформы
+            if (!bonusActive && !bonus1Pending) {
+              bonus1Pending = true;
+              playBonusSound();
+            }
           }
         }
       }
@@ -2142,6 +2176,7 @@
             player.y = p.y - player.height;
             const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
             onPlatform = true;
+            bonusesLockedUntilLand = false;
             // Бонус 1: активация после первого касания платформы
             if (bonus1Pending) {
               activateBonus1();
@@ -2153,24 +2188,23 @@
               bonus2LandArmed = false;
               cdBonus2 = ABILITY_COOLDOWN;
             }
-            // Luma (5): вниз — стоять, вверх / обычный — прыгать
-            const wantStand = hasStandAbility() && keys.down && !keys.up && p.type !== 'spring';
-            if (wantStand) {
-              player.vy = 0;
-              // пока стоит — не ломаем платформу
+            // Luma (5): первое касание — движущаяся платформа останавливается навсегда
+            if (hasMovingFreezeAbility() && p.type === 'moving' && !p.frozen) {
+              p.frozen = true;
+              p.speed = 0;
+              p.dir = 0;
+            }
+            player.vy = JUMP_FORCE * jumpMul;
+            spawnPlatformDust(player.x + player.width / 2, p.y);
+            if (p.type === 'spring') {
+              player.vy = JUMP_FORCE * 1.7 * jumpMul;
+              playSpringSound();
             } else {
-              player.vy = JUMP_FORCE * jumpMul;
-              spawnPlatformDust(player.x + player.width / 2, p.y);
-              if (p.type === 'spring') {
-                player.vy = JUMP_FORCE * 1.7 * jumpMul;
-                playSpringSound();
-              } else {
-                playJumpSound();
-              }
-              if (p.type === 'breaking' && !hasSafeBreak()) {
-                p.broken = true;
-                p.breakTimer = 0;
-              }
+              playJumpSound();
+            }
+            if (p.type === 'breaking' && !hasSafeBreak()) {
+              p.broken = true;
+              p.breakTimer = 0;
             }
             break;
           }
@@ -2212,15 +2246,16 @@
       if (!bonusActive && invincibleTimer <= 0 && gameState === 'playing' &&
           player.y > cameraY + HEIGHT + 50) {
         if (extraLifeReady) {
-          // Щит срывается (бонус 2 или стандартная способность 1/6)
+          // Щит срывается (бонус 2 или способность 1/6) — взлёт ~100 m
           extraLifeReady = false;
           bonus2FromItem = false;
-          // Тот же CD: взлёт → падение → касание платформы
           bonus2CdPending = true;
           bonus2LandArmed = false;
-          player.vy = JUMP_FORCE * 1.7 * 2;
+          bonusesLockedUntilLand = true;
+          // ~100 m: h = v²/(2g) → v = sqrt(2*g*1000)
+          player.vy = -Math.sqrt(2 * GRAVITY * 1000);
           player.y = cameraY + HEIGHT * 0.55;
-          invincibleTimer = 180; // 3 сек моргания
+          invincibleTimer = 180;
           playSpringSound();
         } else {
           startDeathAnimation();
@@ -2230,14 +2265,18 @@
 
     function triggerLevelWin(cleared) {
       levelWinLevel = cleared;
+      levelWinFirstClear = !levelsCompleted[cleared];
       levelsCompleted[cleared] = true;
       if (cleared >= maxLevelUnlocked && cleared < 100) maxLevelUnlocked = cleared + 1;
-      const reward = 50 + cleared;
-      totalCoins += reward;
-      totalCrystals += 5000;
-      saveProgress();
+      // Награда только при первом прохождении
+      if (levelWinFirstClear) {
+        const reward = 50 + cleared;
+        totalCoins += reward;
+        totalCrystals += 5000;
+        saveProgress();
+      }
       saveMetaProgress();
-      playBonusSound();
+      playLevelWinSound();
       if (runCoins > bestRunCoins) {
         bestRunCoins = runCoins;
         try { localStorage.setItem('monsterJumpBestRunCoins', String(bestRunCoins)); } catch (e) {}
@@ -2343,6 +2382,7 @@
       bonusTimer = 0;
       bonusVisualScale = 1;
       bonus1Pending = false;
+      bonusesLockedUntilLand = false;
       particles = [];
       isPaused = false;
       extraLifeReady = hasExtraLife();
@@ -2731,20 +2771,20 @@
       const screenY = player.y - cameraY;
       const img = currentPlayerImg;
       const scale = bonusVisualScale;
-      // Наклон; squash/stretch только без бонуса
-      const tilt = Math.max(-0.28, Math.min(0.28, player.vx * 0.045));
+      // Сглаженный наклон; squash/stretch только без бонуса
+      const tilt = playerTilt;
       const speedY = Math.abs(player.vy);
       let stretchY = 1;
       let stretchX = 1;
       if (bonusVisualScale < 1.05) {
         if (player.vy < -2) {
-          stretchY = 1 + Math.min(0.18, speedY * 0.012);
+          stretchY = 1 + Math.min(0.12, speedY * 0.008);
           stretchX = 1 / stretchY;
         } else if (player.vy > 4) {
-          stretchY = 1 - Math.min(0.12, speedY * 0.008);
+          stretchY = 1 - Math.min(0.08, speedY * 0.005);
           stretchX = 1 / stretchY;
         }
-        const moveStretch = Math.min(0.1, Math.abs(player.vx) * 0.012);
+        const moveStretch = Math.min(0.06, Math.abs(player.vx) * 0.008);
         stretchX *= 1 + moveStretch;
         stretchY *= 1 - moveStretch * 0.5;
       }
@@ -3857,8 +3897,8 @@
       ctx.fillText(String(levelWinLevel), WIDTH / 2, panelY + 92);
 
       // Награды вертикально: кристаллы → монеты → высота
-      const rewardCoins = 50 + levelWinLevel;
-      const rewardCrystals = 5000;
+      const rewardCoins = levelWinFirstClear ? (50 + levelWinLevel) : 0;
+      const rewardCrystals = levelWinFirstClear ? 5000 : 0;
       const rewardHeight = score;
       const iconS = 28;
       const rowH = 34;
