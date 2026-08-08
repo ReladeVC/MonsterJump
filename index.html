@@ -839,6 +839,10 @@
 
     // Пауза
     let isPaused = false;
+    let introActive = false;
+    let introTimer = 0;
+    let introLaunched = false;
+    const INTRO_DELAY = 50; // ~0.55 с при 90 FPS
 
     // ---------- МУЗЫКА (фоновый слой) ----------
     let musicEnabled = true;
@@ -1971,6 +1975,25 @@
       }
       if (gameState !== 'playing' || isPaused) return;
 
+      // --- Интро: задержка, затем прыжок снизу на платформу ---
+      if (introActive && !introLaunched) {
+        if (introTimer > 0) {
+          introTimer--;
+          player.vx = 0;
+          player.vy = 0;
+          player.y = cameraY + HEIGHT + 24;
+          updateParticles();
+          updateShield();
+          return;
+        }
+        const basePlat = platforms.reduce((a, b) => (a.y > b.y ? a : b), platforms[0]);
+        player.x = basePlat.x + basePlat.width / 2 - PLAYER_WIDTH / 2;
+        player.y = cameraY + HEIGHT + 8;
+        player.vy = JUMP_FORCE * 1.25;
+        introLaunched = true;
+        playJumpSound();
+      }
+
       onPlatform = false;
       if (cdBonus1 > 0) cdBonus1--;
       if (cdBonus2 > 0) cdBonus2--;
@@ -2177,6 +2200,11 @@
             const jumpMul = jumpBoostTimer > 0 ? 2 : 1;
             onPlatform = true;
             bonusesLockedUntilLand = false;
+            // Конец интро — приземлились
+            if (introActive) {
+              introActive = false;
+              introLaunched = false;
+            }
             // Бонус 1: активация после первого касания платформы
             if (bonus1Pending) {
               activateBonus1();
@@ -2242,8 +2270,8 @@
         !c.collected && (c.magnetized || c.y < cameraY + HEIGHT + 120)
       );
 
-      // Проверка проигрыша (во время бонуса / неуязвимости / умирания — нет)
-      if (!bonusActive && invincibleTimer <= 0 && gameState === 'playing' &&
+      // Проверка проигрыша (во время бонуса / неуязвимости / умирания / интро — нет)
+      if (!bonusActive && !introActive && invincibleTimer <= 0 && gameState === 'playing' &&
           player.y > cameraY + HEIGHT + 50) {
         if (extraLifeReady) {
           // Щит срывается (бонус 2 или способность 1/6) — взлёт ~100 m
@@ -2403,6 +2431,17 @@
       gameOverEl.style.display = 'none';
       hintEl.style.display = 'block';
       initPlatforms();
+
+      // Плавный старт: персонаж снизу → прыжок на ближайшую платформу
+      const basePlat = platforms.reduce((a, b) => (a.y > b.y ? a : b), platforms[0]);
+      player.x = basePlat.x + basePlat.width / 2 - PLAYER_WIDTH / 2;
+      player.y = HEIGHT + PLAYER_HEIGHT + 30;
+      player.vx = 0;
+      player.vy = 0;
+      cameraY = 0;
+      introActive = true;
+      introTimer = INTRO_DELAY;
+      introLaunched = false;
     }
 
     function goToMenu() {
