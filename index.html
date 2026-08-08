@@ -4275,17 +4275,18 @@
             fourthCharTapCount = 0;
             sixthCharTapCount = 0;
             if (thirdCharTapCount >= 25) {
+              // Сброс уровней персонажей и достижений, этапы (levels) сохраняются
               totalCoins = 0;
               totalCrystals = 0;
               totalRolls = 0;
               unlockedChars = [true, false, false, false, false, false];
+              charLevels = [1, 1, 1, 1, 1, 1];
               invBonus1 = 0;
               invBonus2 = 0;
               invBonus3 = 0;
               bestScore = 0;
               selectedCharacter = 0;
-              maxLevelUnlocked = 1;
-              levelsCompleted = {};
+              // maxLevelUnlocked и levelsCompleted — не трогаем
               missionsDone = {};
               missionStats = { plays: 0, use_bonus1: 0, use_bonus2: 0, use_bonus3: 0 };
               bestRunCoins = 0;
@@ -4294,7 +4295,7 @@
               try { localStorage.setItem('monsterJumpBestRunCoins', '0'); } catch (e) {}
               thirdCharTapCount = 0;
               secretFlashTimer = 90;
-              secretFlashText = 'DEL';
+              secretFlashText = 'RST';
               coinShake = 18;
             }
           } else if (i === 3) {
