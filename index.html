@@ -3972,10 +3972,15 @@
       roundRect(scoreX, topY, scoreW, barH, 8);
       ctx.fill();
 
-      if (isImageReady(liderImg)) {
-        drawSprite(liderImg, scoreX + 20, topY + 16, 20, 20);
+      if (currentLevel > 0 && levelTarget > 0) {
+        // В уровнях — цель прохождения
+        drawOutlinedText('Цель × ' + levelTarget + ' m', scoreX + scoreW / 2, topY + 16, 'bold 14px Segoe UI, Arial', 'center');
+      } else {
+        if (isImageReady(liderImg)) {
+          drawSprite(liderImg, scoreX + 20, topY + 16, 20, 20);
+        }
+        drawOutlinedText(bestScore + ' m', scoreX + scoreW / 2 + 8, topY + 16, 'bold 16px Segoe UI, Arial', 'center');
       }
-      drawOutlinedText(bestScore + ' m', scoreX + scoreW / 2 + 8, topY + 16, 'bold 16px Segoe UI, Arial', 'center');
       drawOutlinedText(score + ' m', scoreX + scoreW / 2, topY + 34, 'bold 13px Segoe UI, Arial', 'center');
 
       // --- Бонусы ниже верхней линии ---
