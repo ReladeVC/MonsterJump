@@ -302,6 +302,7 @@
     let levelImg = null;
     let noteImg = null;
     let settingImg = null;
+    let playerUpImg = null;
     let homeImg = null;
     let nextImg = null;
     let levelRangeImgs = [null, null, null, null, null]; // 1-20, 21-40, 41-60, 61-80, 81-100
@@ -354,18 +355,18 @@
       },
       {
         name: 'Brutus',
-        price: 70000, unlock: 'coins', label: 'Прочный · −25% пад.',
-        desc: 'Не ломает разрушающиеся платформы. Падение на 25% медленнее.'
+        price: 70000, unlock: 'coins', label: 'Прочный',
+        desc: 'Не ломает разрушающиеся платформы. Замедление падения — только от прокачки уровня.'
       },
       {
         name: 'Luma',
         price: 140000, unlock: 'coins', label: 'Стоять · прыжок',
-        desc: 'Падение на 50% медленнее. Монеты ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше.'
+        desc: 'Монеты ×2. Удержание вниз / свайп вниз — стоит на платформе; вверх / свайп вверх — прыгает дальше. Замедление падения — от прокачки.'
       },
       {
         name: 'Hex',
         price: 280000, unlock: 'coins', label: 'Все силы',
-        desc: 'Все способности: запасная жизнь, магнит, монеты ×2, падение −50%.'
+        desc: 'Все способности: запасная жизнь, магнит, монеты ×2. Замедление падения — только от прокачки уровня.'
       }
     ];
     let charInfoPopup = -1; // индекс персонажа для окна способностей, -1 = закрыто
@@ -380,15 +381,10 @@
     function hasMagnet() {
       return selectedCharacter === 2 || selectedCharacter === 5;
     }
-    function hasSlowFall() {
-      // 5-й и 6-й: полное замедление; 4-й: половина эффекта
-      return selectedCharacter === 3 || selectedCharacter === 4 || selectedCharacter === 5;
-    }
-    // Множитель гравитации при падении: 1 = обычно, 0.5 = −50%, 0.75 = −25% (половина эффекта 5-го)
+    // −% падения только от прокачки: ур. N → −N% (макс 99 → −99%)
     function fallGravityMul() {
-      if (selectedCharacter === 4 || selectedCharacter === 5) return 0.5;
-      if (selectedCharacter === 3) return 0.75;
-      return 1;
+      const lvl = Math.max(1, Math.min(99, charLevels[selectedCharacter] || 1));
+      return Math.max(0.01, 1 - lvl * 0.01);
     }
     function hasExtraLife() {
       return selectedCharacter === 0 || selectedCharacter === 5;
@@ -417,6 +413,7 @@
     let secondCharTapCount = 0;
     let thirdCharTapCount = 0;
     let fourthCharTapCount = 0;
+    let sixthCharTapCount = 0;
 
     let charShake = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let charSelectScale = [1, 1, 1, 1, 1, 1]; // плавное увеличение выбранного
@@ -455,6 +452,8 @@
     let totalCrystals = 0;
     let totalRolls = 0; // рубины Roll.png
     let unlockedChars = [true, false, false, false, false, false];
+    let charLevels = [1, 1, 1, 1, 1, 1];
+    const CHAR_UPGRADE_COST = 5000; // кристаллы за уровень
     try {
       totalCoins = parseInt(localStorage.getItem('monsterJumpCoins') || '0', 10) || 0;
       totalCrystals = parseInt(localStorage.getItem('monsterJumpCrystals') || '0', 10) || 0;
@@ -470,6 +469,13 @@
           unlockedChars[0] = true;
         }
       }
+      const lv = localStorage.getItem('monsterJumpCharLevels');
+      if (lv) {
+        const arr = JSON.parse(lv);
+        if (Array.isArray(arr)) {
+          for (let i = 0; i < 6; i++) charLevels[i] = Math.max(1, Math.min(99, parseInt(arr[i], 10) || 1));
+        }
+      }
     } catch (e) {}
 
     function saveProgress() {
@@ -478,11 +484,28 @@
         localStorage.setItem('monsterJumpCrystals', String(totalCrystals));
         localStorage.setItem('monsterJumpRolls', String(totalRolls));
         localStorage.setItem('monsterJumpUnlocks', JSON.stringify(unlockedChars));
+        localStorage.setItem('monsterJumpCharLevels', JSON.stringify(charLevels));
         localStorage.setItem('monsterJumpBest', String(bestScore));
         localStorage.setItem('monsterJumpBonus1', String(invBonus1));
         localStorage.setItem('monsterJumpBonus2', String(invBonus2));
         localStorage.setItem('monsterJumpBonus3', String(invBonus3));
       } catch (e) {}
+    }
+
+    function upgradeCharacter(i) {
+      if (i < 0 || i >= 6) return false;
+      if (!isCharUnlocked(i)) return false;
+      const cur = charLevels[i] || 1;
+      if (cur >= 99) return false;
+      if (totalCrystals < CHAR_UPGRADE_COST) {
+        coinShake = 18;
+        return false;
+      }
+      totalCrystals -= CHAR_UPGRADE_COST;
+      charLevels[i] = Math.min(99, cur + 1);
+      saveProgress();
+      playBonusSound();
+      return true;
     }
 
     function isCharUnlocked(i) {
@@ -613,6 +636,9 @@
     ]);
     settingImg        = loadImageWithFallback([
       'assets/setting.png', 'assets/Setting.png', 'assets/SETTING.png'
+    ]);
+    playerUpImg       = loadImageWithFallback([
+      'assets/playerup.png', 'assets/Playerup.png', 'assets/PLAYERUP.png'
     ]);
     homeImg           = loadImageWithFallback([
       'assets/Home.png', 'assets/home.png', 'assets/HOME.png'
@@ -1601,6 +1627,7 @@
           totalCrystals = 0;
           totalRolls = 0;
           unlockedChars = [true, false, false, false, false, false];
+          charLevels = [1, 1, 1, 1, 1, 1];
           invBonus1 = 0;
           invBonus2 = 0;
           invBonus3 = 0;
@@ -1971,8 +1998,7 @@
       if (player.x > WIDTH) player.x = -player.width;
 
       // Гравитация (не во время бонуса)
-      // Slow fall только при падении — высота прыжка как у всех
-      // 5/6: −50% | 4: −25% (половина эффекта 5-го)
+      // Slow fall при падении = уровень персонажа (−1% за уровень, макс −99%)
       if (!bonusActive) {
         let g = GRAVITY;
         if (player.vy > 0) {
@@ -3048,24 +3074,26 @@
           ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
         }
 
-        // Кнопка «!» — внутри рамки, правый верхний угол
-        const infoR = 10;
-        const infoCx = cardX + cardW - infoR - 6;
-        const infoCy = cardY + infoR + 6;
-        ctx.fillStyle = 'rgba(255, 200, 60, 0.95)';
-        ctx.beginPath();
-        ctx.arc(infoCx, infoCy, infoR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.font = 'bold 13px Segoe UI, Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('!', infoCx, infoCy + 1);
-        ctx.textBaseline = 'alphabetic';
-        titleInfoBtns.push({ i, x: infoCx - infoR - 3, y: infoCy - infoR - 3, w: infoR * 2 + 6, h: infoR * 2 + 6 });
+        // Кнопка настроек персонажа — playerup.png
+        const setS = 24;
+        const setX = cardX + cardW - setS - 3;
+        const setY = cardY + 3;
+        if (isImageReady(playerUpImg)) {
+          ctx.drawImage(playerUpImg, setX, setY, setS, setS);
+        } else if (isImageReady(settingImg)) {
+          ctx.drawImage(settingImg, setX, setY, setS, setS);
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          roundRect(setX, setY, setS, setS, 6);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 14px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⬆', setX + setS / 2, setY + setS / 2 + 1);
+          ctx.textBaseline = 'alphabetic';
+        }
+        titleInfoBtns.push({ i, x: setX - 2, y: setY - 2, w: setS + 4, h: setS + 4 });
 
         if (!unlocked) {
           ctx.fillStyle = shakeT > 0 ? 'rgba(120,0,0,0.5)' : 'rgba(0,0,0,0.45)';
@@ -3084,6 +3112,9 @@
             ctx.textBaseline = 'alphabetic';
           }
         }
+
+        // Уровень — правый нижний угол рамки (поверх затемнения)
+        drawOutlinedText('Ур: ' + (charLevels[i] || 1), cardX + cardW - 6, cardY + cardH - 8, 'bold 11px Segoe UI, Arial', 'right');
 
         ctx.restore(); // конец scale выбранного персонажа
 
@@ -3169,7 +3200,7 @@
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
         const pw = Math.min(320, WIDTH - 40);
-        const ph = 210;
+        const ph = 260;
         const px = (WIDTH - pw) / 2;
         const py = (HEIGHT - ph) / 2 - 20;
         drawMenuPanelBg(px, py, pw, ph, 18);
@@ -3184,25 +3215,45 @@
           ctx.drawImage(img, px + 20 + (av - dw) / 2, py + 18 + (av - dh) / 2, dw, dh);
         }
 
-        ctx.fillStyle = TEXT_COL;
-        ctx.font = 'bold 22px Segoe UI, Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(info.name, px + 20 + av + 14, py + 30);
+        const lvl = charLevels[charInfoPopup] || 1;
+        drawOutlinedText(info.name, px + 20 + av + 14, py + 28, 'bold 20px Segoe UI, Arial', 'left');
+        drawOutlinedText('Ур: ' + lvl, px + 20 + av + 14, py + 52, 'bold 14px Segoe UI, Arial', 'left');
         ctx.fillStyle = TEXT_COL;
         ctx.font = '12px Segoe UI, Arial';
-        ctx.fillText(info.label, px + 20 + av + 14, py + 52);
-        ctx.textBaseline = 'alphabetic';
+        ctx.textAlign = 'left';
+        ctx.fillText(info.label, px + 20 + av + 14, py + 72);
 
         // Описание
         ctx.fillStyle = TEXT_COL;
         ctx.font = '14px Segoe UI, Arial';
         const lines = wrapText(info.desc, pw - 40);
-        let ty = py + 90;
+        let ty = py + 98;
         for (const line of lines) {
           ctx.fillText(line, px + 20, ty);
-          ty += 20;
+          ty += 18;
         }
+
+        // Кнопка «Улучшить × 5000» кристаллов
+        const upW = Math.min(240, pw - 40);
+        const upH = 44;
+        const upX = px + (pw - upW) / 2;
+        const upY = py + ph - 58;
+        const atMax = lvl >= 99;
+        const canUp = isCharUnlocked(charInfoPopup) && totalCrystals >= CHAR_UPGRADE_COST && !atMax;
+        drawKeycapBtn(upX, upY, upW, upH, '', TEXT_COL);
+        if (isImageReady(crystalImg) && !atMax) {
+          ctx.drawImage(crystalImg, upX + 18, upY + (upH - 22) / 2, 22, 22);
+        }
+        const upLabel = atMax ? 'МАКС. УР. 99' : ('Улучшить  × ' + CHAR_UPGRADE_COST);
+        drawOutlinedText(upLabel, upX + upW / 2 + (atMax ? 0 : 8), upY + upH / 2, 'bold 14px Segoe UI, Arial', 'center');
+        if (!canUp) {
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          roundRect(upX, upY, upW, upH, 10);
+          ctx.fill();
+        }
+        // Подпись эффекта
+        drawOutlinedText('Падение −' + lvl + '%', WIDTH / 2, upY - 14, 'bold 12px Segoe UI, Arial', 'center');
+        titleLayout._infoUpgrade = { x: upX, y: upY, w: upW, h: upH, i: charInfoPopup };
 
         // Кнопка закрыть
         const cx = px + pw - 28;
@@ -3222,6 +3273,7 @@
       } else {
         titleLayout._infoClose = null;
         titleLayout._infoPanel = null;
+        titleLayout._infoUpgrade = null;
       }
     }
 
@@ -4102,8 +4154,13 @@
         return;
       }
 
-      // Окно описания: закрытие
+      // Окно настроек персонажа
       if (charInfoPopup >= 0) {
+        const up = titleLayout._infoUpgrade;
+        if (up && mx >= up.x && mx <= up.x + up.w && my >= up.y && my <= up.y + up.h) {
+          upgradeCharacter(up.i);
+          return;
+        }
         const cl = titleLayout._infoClose;
         const panel = titleLayout._infoPanel;
         if (cl && mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) {
@@ -4183,6 +4240,7 @@
             secondCharTapCount = 0;
             thirdCharTapCount = 0;
             fourthCharTapCount = 0;
+            sixthCharTapCount = 0;
             if (firstCharTapCount >= 25) {
               for (let j = 0; j < 6; j++) unlockedChars[j] = true;
               saveProgress();
@@ -4196,6 +4254,7 @@
             firstCharTapCount = 0;
             thirdCharTapCount = 0;
             fourthCharTapCount = 0;
+            sixthCharTapCount = 0;
             if (secondCharTapCount >= 25) {
               maxLevelUnlocked = 100;
               saveMetaProgress();
@@ -4209,6 +4268,7 @@
             firstCharTapCount = 0;
             secondCharTapCount = 0;
             fourthCharTapCount = 0;
+            sixthCharTapCount = 0;
             if (thirdCharTapCount >= 25) {
               totalCoins = 0;
               totalCrystals = 0;
@@ -4237,6 +4297,7 @@
             firstCharTapCount = 0;
             secondCharTapCount = 0;
             thirdCharTapCount = 0;
+            sixthCharTapCount = 0;
             if (fourthCharTapCount >= 25) {
               totalCoins += 1000000;
               saveProgress();
@@ -4245,11 +4306,26 @@
               secretFlashText = '+1M';
               coinShake = 18;
             }
+          } else if (i === 5) {
+            sixthCharTapCount++;
+            firstCharTapCount = 0;
+            secondCharTapCount = 0;
+            thirdCharTapCount = 0;
+            fourthCharTapCount = 0;
+            if (sixthCharTapCount >= 25) {
+              totalCrystals += 1000000;
+              saveProgress();
+              sixthCharTapCount = 0;
+              secretFlashTimer = 90;
+              secretFlashText = '+1M💎';
+              coinShake = 18;
+            }
           } else {
             firstCharTapCount = 0;
             secondCharTapCount = 0;
             thirdCharTapCount = 0;
             fourthCharTapCount = 0;
+            sixthCharTapCount = 0;
           }
           if (isCharUnlocked(i)) selectedCharacter = i;
           else if (CHAR_INFO[i].unlock === 'coins') triggerNoMoneyShake(i);
