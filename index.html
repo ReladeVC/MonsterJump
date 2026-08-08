@@ -301,6 +301,7 @@
       complete:        'assets/complite.png',
       close:           'assets/close.png',
       frame:           'assets/frame.png',
+      menuitem:        'assets/menuitem.png',
       price:           'assets/price.png',
       backgroundmenu:  'assets/backgroundmenu.png',
       menuname:        'assets/menuname.png',
@@ -319,6 +320,7 @@
     let completeImg = null;
     let closeImg = null;
     let frameImg = null;
+    let menuItemImg = null;
     let priceImg = null;
     let backgroundMenuImg = null;
     let menuNameImg = null;
@@ -690,6 +692,10 @@
     frameImg = loadImageWithFallback([
       'assets/frame.png', 'assets/Frame.png', 'assets/FRAME.png'
     ]);
+    menuItemImg = loadImageWithFallback([
+      'assets/menuitem.png', 'assets/Menuitem.png', 'assets/MENUITEM.png',
+      'assets/menuItem.png'
+    ]);
     priceImg = loadImageWithFallback([
       'assets/price.png', 'assets/Price.png', 'assets/PRICE.png'
     ]);
@@ -928,6 +934,7 @@
 
     // ---------- МУЗЫКА (фоновый слой) ----------
     let musicEnabled = true;
+    let sfxEnabled = true;
     let musicStarted = false;
     let musicVol = 0.22;
     let sfxVol = 0.7;
@@ -935,6 +942,7 @@
       musicVol = parseFloat(localStorage.getItem('monsterJumpMusicVol') || '0.22');
       sfxVol = parseFloat(localStorage.getItem('monsterJumpSfxVol') || '0.7');
       if (localStorage.getItem('monsterJumpMusicOn') === '0') musicEnabled = false;
+      if (localStorage.getItem('monsterJumpSfxOn') === '0') sfxEnabled = false;
     } catch (e) {}
 
     // Меню: null | 'levels' | 'missions' | 'settings'
@@ -1046,6 +1054,7 @@
         localStorage.setItem('monsterJumpMusicVol', String(musicVol));
         localStorage.setItem('monsterJumpSfxVol', String(sfxVol));
         localStorage.setItem('monsterJumpMusicOn', musicEnabled ? '1' : '0');
+        localStorage.setItem('monsterJumpSfxOn', sfxEnabled ? '1' : '0');
       } catch (e) {}
     }
 
@@ -1149,7 +1158,12 @@
       wetG.connect(outGain);
     }
 
+    function canPlaySfx() {
+      return sfxEnabled && sfxVol > 0.001;
+    }
+
     function playTone(ctx, now, { type, freq, freqEnd, dur, vol, delay = 0, filterFreq, Q }) {
+      if (!canPlaySfx()) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
@@ -1174,6 +1188,7 @@
     }
 
     function playJumpSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1190,7 +1205,7 @@
         osc.frequency.setValueAtTime(340, now);
         osc.frequency.exponentialRampToValueAtTime(210, now + 0.07);
         g.gain.setValueAtTime(0.001, now);
-        g.gain.exponentialRampToValueAtTime(0.11, now + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.11 * sfxVol, now + 0.008);
         g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
         osc.start(now);
         osc.stop(now + 0.1);
@@ -1199,6 +1214,7 @@
 
     // Звук проигрыша — нисходящий грустный тон
     function playDeathSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1294,6 +1310,7 @@
     }
 
     function playSpringSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1304,6 +1321,7 @@
     }
 
     function playBonusSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1331,6 +1349,7 @@
 
     // Звук повышения уровня персонажа
     function playLevelUpSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1343,12 +1362,14 @@
     }
 
     function playCoinSound() {
+      if (!canPlaySfx()) return;
       try {
         const ctx = getAudioCtx();
+        // учитываем громкость эффектов
         const now = ctx.currentTime;
         // Интересный мягкий перезвон: две ноты вверх + низкий хвост
         const master = ctx.createGain();
-        master.gain.value = 0.5;
+        master.gain.value = 0.5 * sfxVol;
         master.connect(ctx.destination);
 
         function bell(freq, t0, vol, dur) {
@@ -3366,8 +3387,10 @@
         const bx = rowX + i * (btnSize + btnGap);
         const by = rowY;
         const pressed = beginPressTransform(bx, by, btnSize, btnSize);
-        // frame.png без прозрачности
-        if (isImageReady(frameImg)) {
+        // menuitem.png без прозрачности
+        if (isImageReady(menuItemImg)) {
+          ctx.drawImage(menuItemImg, bx, by, btnSize, btnSize);
+        } else if (isImageReady(frameImg)) {
           ctx.drawImage(frameImg, bx, by, btnSize, btnSize);
         } else {
           ctx.fillStyle = 'rgba(60, 50, 40, 0.95)';
@@ -3721,45 +3744,91 @@
       }
 
       if (titleMenu === 'settings') {
-        // Музыка вкл
-        let sy = py + 70;
-        ctx.fillStyle = TEXT_COL;
-        ctx.font = '15px Segoe UI';
-        ctx.textAlign = 'left';
-        ctx.fillText('Музыка', px + 28, sy);
+        // Блоки как в паузе — backgroundmenu вокруг элементов
+        const rowPad = 16;
+        const rowX = px + 20;
+        const rowW = pw - 40;
+        let sy = py + 72;
+
+        // Музыка вкл/выкл
         {
-          const tx = px + pw - 80, ty = sy - 18, tw = 50, th = 28;
+          const rowH = 52;
+          drawMenuPanelBg(rowX, sy, rowW, rowH, 14);
+          drawOutlinedText('Музыка', rowX + rowPad, sy + rowH / 2, 'bold 15px Segoe UI, Arial', 'left');
+          const tx = rowX + rowW - 70, ty = sy + (rowH - 28) / 2, tw = 56, th = 28;
           const tp = beginPressTransform(tx, ty, tw, th);
-          drawToggle(px + pw - 70, sy - 12, musicEnabled);
+          drawToggle(tx + 4, ty + 1, musicEnabled);
           endPressTransform(tp, tx, ty, tw, th);
           titleLayout._menuHits.push({ type: 'togMusic', x: tx, y: ty, w: tw, h: th });
+          sy += rowH + 10;
         }
 
-        sy += 50;
-        ctx.fillText('Громкость музыки', px + 28, sy);
-        drawSlider(px + 28, sy + 14, pw - 56, musicVol);
-        titleLayout._menuHits.push({ type: 'slMusic', x: px + 28, y: sy + 6, w: pw - 56, h: 28 });
+        // Звуки (эффекты) вкл/выкл
+        {
+          const rowH = 52;
+          drawMenuPanelBg(rowX, sy, rowW, rowH, 14);
+          drawOutlinedText('Звуки', rowX + rowPad, sy + rowH / 2, 'bold 15px Segoe UI, Arial', 'left');
+          const tx = rowX + rowW - 70, ty = sy + (rowH - 28) / 2, tw = 56, th = 28;
+          const tp = beginPressTransform(tx, ty, tw, th);
+          drawToggle(tx + 4, ty + 1, sfxEnabled);
+          endPressTransform(tp, tx, ty, tw, th);
+          titleLayout._menuHits.push({ type: 'togSfx', x: tx, y: ty, w: tw, h: th });
+          sy += rowH + 10;
+        }
 
-        sy += 60;
-        ctx.fillText('Громкость эффектов', px + 28, sy);
-        drawSlider(px + 28, sy + 14, pw - 56, sfxVol);
-        titleLayout._menuHits.push({ type: 'slSfx', x: px + 28, y: sy + 6, w: pw - 56, h: 28 });
+        // Громкость музыки
+        {
+          const rowH = 64;
+          drawMenuPanelBg(rowX, sy, rowW, rowH, 14);
+          drawOutlinedText('Громкость музыки', rowX + rowPad, sy + 18, 'bold 14px Segoe UI, Arial', 'left');
+          drawSlider(rowX + rowPad, sy + 34, rowW - rowPad * 2, musicVol);
+          titleLayout._menuHits.push({ type: 'slMusic', x: rowX + rowPad, y: sy + 26, w: rowW - rowPad * 2, h: 28 });
+          sy += rowH + 10;
+        }
 
-        sy += 55;
-        ctx.fillStyle = TEXT_COL;
-        ctx.font = '12px Segoe UI';
-        ctx.fillText('Коды: monstergold · monsterall · monsterdell · openall', px + 28, sy);
+        // Громкость эффектов
+        {
+          const rowH = 64;
+          drawMenuPanelBg(rowX, sy, rowW, rowH, 14);
+          drawOutlinedText('Громкость эффектов', rowX + rowPad, sy + 18, 'bold 14px Segoe UI, Arial', 'left');
+          drawSlider(rowX + rowPad, sy + 34, rowW - rowPad * 2, sfxVol);
+          titleLayout._menuHits.push({ type: 'slSfx', x: rowX + rowPad, y: sy + 26, w: rowW - rowPad * 2, h: 28 });
+          sy += rowH + 12;
+        }
+
+        drawOutlinedText('Коды: monstergold · monsterall · monsterdell · openall', WIDTH / 2, sy + 8, 'bold 11px Segoe UI, Arial', 'center');
       }
     }
 
     function drawToggle(x, y, on) {
-      ctx.fillStyle = TEXT_COL;
-      roundRect(x, y, 40, 22, 11);
+      // Заметный переключатель: зелёный Вкл / серый Выкл
+      const w = 48, h = 26;
+      ctx.save();
+      // трек
+      ctx.fillStyle = on ? 'rgba(76, 175, 80, 0.95)' : 'rgba(80, 80, 90, 0.9)';
+      roundRect(x, y, w, h, h / 2);
       ctx.fill();
-      ctx.fillStyle = TEXT_COL;
+      // обводка
+      ctx.strokeStyle = on ? 'rgba(200, 255, 200, 0.5)' : 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1.5;
+      roundRect(x, y, w, h, h / 2);
+      ctx.stroke();
+      // бегунок
+      const kx = on ? x + w - 13 : x + 13;
       ctx.beginPath();
-      ctx.arc(on ? x + 28 : x + 12, y + 11, 8, 0, Math.PI * 2);
+      ctx.arc(kx, y + h / 2, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
       ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // подпись
+      ctx.font = 'bold 9px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = on ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.55)';
+      ctx.fillText(on ? 'Вкл' : 'Выкл', on ? x + 16 : x + w - 16, y + h / 2 + 0.5);
+      ctx.restore();
     }
 
     function drawSlider(x, y, w, val) {
@@ -4186,9 +4255,7 @@
         const cellX = colX;
         const cd = which === 1 ? cdBonus1 : (which === 2 ? cdBonus2 : cdBonus3);
         const busy = (which === 1 && (bonusActive || bonus1Pending)) || (which === 2 && (extraLifeReady || bonus2CdPending)) || (which === 3 && jumpBoostTimer > 0);
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        roundRect(cellX, y, cellW, cellH, 10);
-        ctx.fill();
+        drawResourceBarBg(cellX, y, cellW, cellH);
 
         const cx = cellX + cellW / 2;
         const cy = y + iconBox / 2 + 4;
@@ -4225,13 +4292,7 @@
 
       function drawBuyCell(which, price) {
         const bx = colX;
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        roundRect(bx, y, buyW, buyH, 8);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.35)';
-        ctx.lineWidth = 1;
-        roundRect(bx, y, buyW, buyH, 8);
-        ctx.stroke();
+        drawResourceBarBg(bx, y, buyW, buyH);
         drawSprite(goldImg, bx + 11, y + buyH / 2, 14, 14);
         drawOutlinedText('×' + price, bx + 20, y + buyH / 2, 'bold 11px Segoe UI', 'left');
         const buyBox = { x: bx, y: y, w: buyW, h: buyH };
@@ -4375,6 +4436,9 @@
             }
             if (h.type === 'togMusic') {
               toggleMusic();
+            }
+            if (h.type === 'togSfx') {
+              sfxEnabled = !sfxEnabled;
               saveMetaProgress();
             }
             if (h.type === 'slMusic') {
