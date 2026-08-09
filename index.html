@@ -302,6 +302,7 @@
       close:           'assets/close.png',
       frame:           'assets/frame.png',
       menuitem:        'assets/menuitem.png',
+      wait:            'assets/wait.png',
       price:           'assets/price.png',
       backgroundmenu:  'assets/backgroundmenu.png',
       menuname:        'assets/menuname.png',
@@ -321,6 +322,7 @@
     let closeImg = null;
     let frameImg = null;
     let menuItemImg = null;
+    let waitImg = null;
     let priceImg = null;
     let backgroundMenuImg = null;
     let menuNameImg = null;
@@ -696,6 +698,9 @@
       'assets/menuitem.png', 'assets/Menuitem.png', 'assets/MENUITEM.png',
       'assets/menuItem.png'
     ]);
+    waitImg = loadImageWithFallback([
+      'assets/wait.png', 'assets/Wait.png', 'assets/WAIT.png'
+    ]);
     priceImg = loadImageWithFallback([
       'assets/price.png', 'assets/Price.png', 'assets/PRICE.png'
     ]);
@@ -871,10 +876,36 @@
       if (assetsReady) return true;
       if (assetsTotal > 0 && assetsLoaded >= assetsTotal) {
         assetsReady = true;
-        if (gameState === 'loading') gameState = 'title';
         return true;
       }
       return false;
+    }
+
+    function updateLoadingTransition() {
+      checkAssetsReady();
+      const elapsed = performance.now() - loadStartTime;
+      const timeP = Math.min(1, elapsed / MIN_LOAD_MS);
+      const assetP = assetsTotal > 0 ? assetsLoaded / assetsTotal : 0;
+      // Красивый прогресс: не скачет, минимум 3 сек
+      const target = Math.min(1, timeP * 0.55 + assetP * 0.45);
+      loadVisualProgress += (Math.max(target, timeP * 0.35) - loadVisualProgress) * 0.08;
+      if (loadVisualProgress > 0.995) loadVisualProgress = 1;
+
+      if (gameState === 'loading' && assetsReady && elapsed >= MIN_LOAD_MS && loadVisualProgress >= 0.98) {
+        gameState = 'loadfade';
+        loadFadeOut = 0;
+        titleFadeIn = 0;
+      }
+      if (gameState === 'loadfade') {
+        // Синхронный crossfade — без скачка в конце
+        loadFadeOut = Math.min(1, loadFadeOut + 0.028);
+        titleFadeIn = loadFadeOut;
+        if (loadFadeOut >= 1) {
+          gameState = 'title';
+          titleFadeIn = 1;
+          loadFadeOut = 1;
+        }
+      }
     }
 
     // ---------- СОСТОЯНИЕ ИГРЫ ----------
@@ -900,7 +931,12 @@
       bestScore = parseInt(localStorage.getItem('monsterJumpBest') || '0', 10) || 0;
     } catch (e) { bestScore = 0; }
 
-    let gameState = 'loading'; // 'loading' | 'title' | 'playing' | 'gameover' | 'dying'
+    let gameState = 'loading'; // 'loading' | 'loadfade' | 'title' | ...
+    let loadStartTime = performance.now();
+    let loadVisualProgress = 0;
+    let loadFadeOut = 0; // 0..1 затемнение загрузки
+    let titleFadeIn = 0; // 0..1 появление меню
+    const MIN_LOAD_MS = 3000;
     let keys = { left: false, right: false, up: false, down: false };
     let touchY = null;
     let touchX = null;
@@ -3862,32 +3898,55 @@
 
     function drawLoadingScreen() {
       checkAssetsReady();
-      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-      grad.addColorStop(0, '#1a1a2e');
-      grad.addColorStop(1, '#0f3460');
-      ctx.fillStyle = grad;
+      // Фон wait.png
+      if (isImageReady(waitImg)) {
+        ctx.drawImage(waitImg, 0, 0, WIDTH, HEIGHT);
+      } else {
+        const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+        grad.addColorStop(0, '#1a1a2e');
+        grad.addColorStop(1, '#0f3460');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+
+      // Лёгкое затемнение снизу для читаемости
+      const veil = ctx.createLinearGradient(0, HEIGHT * 0.55, 0, HEIGHT);
+      veil.addColorStop(0, 'rgba(0,0,0,0)');
+      veil.addColorStop(1, 'rgba(0,0,0,0.45)');
+      ctx.fillStyle = veil;
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-      const progress = assetsTotal > 0 ? assetsLoaded / assetsTotal : 0;
-      ctx.fillStyle = TEXT_COL;
-      ctx.font = 'bold 22px Segoe UI, Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Загрузка...', WIDTH / 2, HEIGHT / 2 - 30);
+      const progress = loadVisualProgress;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 450);
 
-      const barW = 220;
-      const barH = 12;
+      drawOutlinedText('Загрузка', WIDTH / 2, HEIGHT - 88, 'bold 16px Segoe UI, Arial', 'center');
+
+      const barW = 240;
+      const barH = 14;
       const barX = (WIDTH - barW) / 2;
-      const barY = HEIGHT / 2;
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      roundRect(barX, barY, barW, barH, 6);
+      const barY = HEIGHT - 58;
+      // подложка бара
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      roundRect(barX - 3, barY - 3, barW + 6, barH + 6, 8);
       ctx.fill();
-      ctx.fillStyle = '#4ecdc4';
-      roundRect(barX, barY, barW * progress, barH, 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(barX, barY, barW, barH, 7);
       ctx.fill();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.font = '14px Segoe UI, Arial';
-      ctx.fillText(Math.floor(progress * 100) + '%', WIDTH / 2, barY + 32);
+      // заполнение с бликом
+      if (progress > 0.01) {
+        const fw = Math.max(8, barW * progress);
+        const g = ctx.createLinearGradient(barX, barY, barX + fw, barY);
+        g.addColorStop(0, '#c9a227');
+        g.addColorStop(0.5, '#ffe082');
+        g.addColorStop(1, '#c9a227');
+        ctx.fillStyle = g;
+        roundRect(barX, barY, fw, barH, 7);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.15 + 0.1 * pulse) + ')';
+        roundRect(barX, barY, fw, barH * 0.4, 7);
+        ctx.fill();
+      }
+      drawOutlinedText(Math.floor(progress * 100) + '%', WIDTH / 2, barY + 32, 'bold 14px Segoe UI, Arial', 'center');
     }
 
     function draw() {
@@ -3903,12 +3962,26 @@
       }
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-      if (gameState === 'loading') {
-        drawLoadingScreen();
+      if (gameState === 'loading' || gameState === 'loadfade') {
+        updateLoadingTransition();
+        if (gameState === 'loadfade') {
+          // Меню уже полное снизу, загрузка только растворяется сверху
+          drawTitleScreen();
+          const a = 1 - loadFadeOut;
+          if (a > 0.01) {
+            ctx.save();
+            ctx.globalAlpha = a;
+            drawLoadingScreen();
+            ctx.restore();
+          }
+        } else {
+          drawLoadingScreen();
+        }
         return;
       }
 
       if (gameState === 'title') {
+        if (titleFadeIn < 1) titleFadeIn = 1;
         drawTitleScreen();
         return;
       }
