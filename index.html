@@ -1493,10 +1493,48 @@
     }
 
     // ---------- ГЕНЕРАЦИЯ ПЛАТФОРМ ----------
-    function createPlatform(y, type = null) {
+    // Тип платформы с учётом уровня (41–60 Brutus, 61–80 Luma, 81–100 смесь)
+    function pickPlatformType() {
+      const r = Math.random();
+      const lv = currentLevel || 0;
+
+      // Прогресс внутри уровня 0..1 (для 81–100 — плавный рост сложности)
+      let stage = 0;
+      if (lv > 0 && levelTarget > 0) {
+        stage = Math.max(0, Math.min(1, score / levelTarget));
+      }
+
+      if (lv >= 41 && lv <= 60) {
+        // Много разрушающихся — удобно 4-му персонажу
+        if (r < 0.52) return 'breaking';
+        if (r < 0.62) return 'moving';
+        if (r < 0.72) return 'spring';
+        return 'normal';
+      }
+      if (lv >= 61 && lv <= 80) {
+        // Много движущихся — удобно 5-му персонажу
+        if (r < 0.52) return 'moving';
+        if (r < 0.62) return 'breaking';
+        if (r < 0.72) return 'spring';
+        return 'normal';
+      }
+      if (lv >= 81 && lv <= 100) {
+        // Плавный рост: в начале больше обычных, к концу — breaking + moving
+        const special = 0.28 + stage * 0.42; // 0.28 → 0.70
+        const breakShare = 0.45 + stage * 0.1; // доля breaking среди special
+        if (r < special * breakShare) return 'breaking';
+        if (r < special) return 'moving';
+        if (r < special + 0.08) return 'spring';
+        return 'normal';
+      }
+
+      // Бесконечный / 1–40 — как раньше
       const types = ['normal', 'normal', 'normal', 'moving', 'breaking', 'spring'];
-      const t = type || types[Math.floor(Math.random() * types.length)];
-      // Все платформы одного размера — как обычная статичная
+      return types[Math.floor(Math.random() * types.length)];
+    }
+
+    function createPlatform(y, type = null) {
+      const t = type || pickPlatformType();
       const w = PLATFORM_WIDTH;
       const h = PLATFORM_HEIGHT;
 
@@ -1506,13 +1544,10 @@
         width: w,
         height: h,
         type: t,
-        // для двигающихся
         dir: Math.random() > 0.5 ? 1 : -1,
         speed: 1.8 + Math.random() * 1.4,
-        // анимация
         phase: Math.random() * Math.PI * 2,
         bob: 0,
-        // для ломающихся
         broken: false,
         breakTimer: 0
       };
@@ -4650,24 +4685,37 @@
             fourthCharTapCount = 0;
             sixthCharTapCount = 0;
             if (thirdCharTapCount >= 25) {
-              // Сброс уровней персонажей и достижений, этапы (levels) сохраняются
-              totalCoins = 0;
-              totalCrystals = 0;
-              totalRolls = 0;
+              // Сброс прокачки и открытых персонажей; этапы/задания сохраняются
+              // Монеты = только с уровней + заданий (без кодов)
+              // Кристаллы = награды за пройденные уровни (5000 за каждый)
+              // Рубины оставляем
+              let coinsKeep = 0;
+              let crystalsKeep = 0;
+              try {
+                for (const k in levelsCompleted) {
+                  if (levelsCompleted[k]) {
+                    const n = parseInt(k, 10);
+                    if (n > 0) {
+                      coinsKeep += 50 + n;
+                      crystalsKeep += 5000;
+                    }
+                  }
+                }
+              } catch (e) {}
+              try {
+                for (const m of MISSIONS) {
+                  if (missionsDone[m.id]) coinsKeep += (m.reward || 0);
+                }
+              } catch (e) {}
+              totalCoins = coinsKeep;
+              totalCrystals = crystalsKeep;
+              // totalRolls — не трогаем
               unlockedChars = [true, false, false, false, false, false];
               charLevels = [1, 1, 1, 1, 1, 1];
-              invBonus1 = 0;
-              invBonus2 = 0;
-              invBonus3 = 0;
-              bestScore = 0;
               selectedCharacter = 0;
-              // maxLevelUnlocked и levelsCompleted — не трогаем
-              missionsDone = {};
-              missionStats = { plays: 0, use_bonus1: 0, use_bonus2: 0, use_bonus3: 0 };
-              bestRunCoins = 0;
+              // levelsCompleted, maxLevelUnlocked, missionsDone — не трогаем
               saveProgress();
               saveMetaProgress();
-              try { localStorage.setItem('monsterJumpBestRunCoins', '0'); } catch (e) {}
               thirdCharTapCount = 0;
               secretFlashTimer = 90;
               secretFlashText = 'RST';
