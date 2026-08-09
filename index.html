@@ -240,7 +240,7 @@
     const GRAVITY = 0.26;
     const JUMP_FORCE = -11.2;
     const TEXT_COL = '#783915';
-    const MOVE_SPEED = 7.2; // как до сглаживания — дальше влево/вправо
+    const MOVE_SPEED = 6.5; // стабильная скорость, долёт до платформ
     const PLATFORM_WIDTH = 70;   // длина как раньше
     const PLATFORM_HEIGHT = 18;  // чуть толще для читаемости
     const PLAYER_WIDTH = 60;   // +50%
@@ -1829,8 +1829,17 @@
         return;
       }
       if (gameState !== 'playing' || isPaused) return;
-      touchX = e.touches[0].clientX;
-      touchY = e.touches[0].clientY;
+      {
+        const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+        if (isHudClick(p.x, p.y)) return;
+        touchX = e.touches[0].clientX;
+        touchY = e.touches[0].clientY;
+        // Удержание пальца: левее персонажа = влево, правее = вправо
+        keys.left = p.x < player.x + player.width / 2;
+        keys.right = !keys.left;
+        keys.up = false;
+        keys.down = false;
+      }
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
@@ -1853,32 +1862,19 @@
         return;
       }
       if (gameState !== 'playing' || isPaused || touchX === null) return;
-      const currentX = e.touches[0].clientX;
+      const p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
       const currentY = e.touches[0].clientY;
-      const dx = currentX - touchX;
       const dy = touchY != null ? currentY - touchY : 0;
-      // Вертикальный свайп — для способности Luma
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 16) {
-        if (dy > 0) {
-          keys.down = true;
-          keys.up = false;
-        } else {
-          keys.up = true;
-          keys.down = false;
-        }
+      // Вертикальный свайп — для Luma
+      if (Math.abs(dy) > 28) {
+        if (dy > 0) { keys.down = true; keys.up = false; }
+        else { keys.up = true; keys.down = false; }
         touchY = currentY;
-      } else if (dx < -18) {
-        keys.left = true;
-        keys.right = false;
-        touchX = currentX;
-      } else if (dx > 18) {
-        keys.right = true;
-        keys.left = false;
-        touchX = currentX;
-      } else if (Math.abs(dx) < 5) {
-        keys.left = false;
-        keys.right = false;
       }
+      // Горизонталь — постоянно по позиции пальца (один жест на весь экран)
+      keys.left = p.x < player.x + player.width / 2;
+      keys.right = !keys.left;
+      touchX = e.touches[0].clientX;
     }, { passive: false });
     // Мышь: скролл меню / управление в игре
     let mouseDown = false;
@@ -2135,17 +2131,17 @@
       updateParticles();
       updateShield();
 
-      // Горизонтальное движение — быстрый разгон (дальше в воздухе)
+      // Горизонталь: мгновенная скорость при удержании (долетает до платформ)
       {
-        let targetVx = 0;
-        if (keys.left) { targetVx = -MOVE_SPEED; player.facing = -1; }
-        else if (keys.right) { targetVx = MOVE_SPEED; player.facing = 1; }
-        // Почти мгновенно как раньше; при бонусе чуть мягче
-        const accel = (bonusActive || bonusVisualScale > 1.05) ? 0.28 : 0.65;
-        player.vx += (targetVx - player.vx) * accel;
-        if (targetVx === 0) {
-          player.vx *= 0.82;
-          if (Math.abs(player.vx) < 0.12) player.vx = 0;
+        if (keys.left) {
+          player.vx = -MOVE_SPEED;
+          player.facing = -1;
+        } else if (keys.right) {
+          player.vx = MOVE_SPEED;
+          player.facing = 1;
+        } else {
+          player.vx *= 0.78;
+          if (Math.abs(player.vx) < 0.15) player.vx = 0;
         }
       }
       // сглаженный наклон
@@ -4773,14 +4769,12 @@
       }
       touchX = null;
       touchY = null;
-      setTimeout(() => {
-        if (touchX === null) {
-          keys.left = false;
-          keys.right = false;
-          keys.up = false;
-          keys.down = false;
-        }
-      }, 90);
+      if (gameState === 'playing') {
+        keys.left = false;
+        keys.right = false;
+        keys.up = false;
+        keys.down = false;
+      }
     }, { passive: false });
 
     // Клавиша P / Escape — пауза
