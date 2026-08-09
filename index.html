@@ -1834,8 +1834,8 @@
         if (isHudClick(p.x, p.y)) return;
         touchX = e.touches[0].clientX;
         touchY = e.touches[0].clientY;
-        // Удержание пальца: левее персонажа = влево, правее = вправо
-        keys.left = p.x < player.x + player.width / 2;
+        // Половина экрана — без дрожания
+        keys.left = p.x < WIDTH / 2;
         keys.right = !keys.left;
         keys.up = false;
         keys.down = false;
@@ -1871,8 +1871,8 @@
         else { keys.up = true; keys.down = false; }
         touchY = currentY;
       }
-      // Горизонталь — постоянно по позиции пальца (один жест на весь экран)
-      keys.left = p.x < player.x + player.width / 2;
+      // Горизонталь — по половине экрана (без дрожания)
+      keys.left = p.x < WIDTH / 2;
       keys.right = !keys.left;
       touchX = e.touches[0].clientX;
     }, { passive: false });
@@ -1899,8 +1899,8 @@
       if (gameState !== 'playing') return;
       if (isHudClick(p.x, p.y)) return;
       mouseDown = true;
-      if (p.x < player.x + player.width / 2) keys.left = true;
-      else keys.right = true;
+      keys.left = p.x < WIDTH / 2;
+      keys.right = !keys.left;
     });
     window.addEventListener('mousemove', e => {
       if (levelDrag && titleMenu === 'levels') {
@@ -1923,7 +1923,7 @@
       }
       if (!mouseDown || gameState !== 'playing') return;
       const p = canvasToGame(e.clientX, e.clientY);
-      keys.left = p.x < player.x + player.width / 2;
+      keys.left = p.x < WIDTH / 2;
       keys.right = !keys.left;
     });
     window.addEventListener('mouseup', () => {
