@@ -897,13 +897,13 @@
         titleFadeIn = 0;
       }
       if (gameState === 'loadfade') {
-        // Синхронный crossfade — без скачка в конце
-        loadFadeOut = Math.min(1, loadFadeOut + 0.028);
+        loadFadeOut = Math.min(1, loadFadeOut + 0.025);
         titleFadeIn = loadFadeOut;
-        if (loadFadeOut >= 1) {
-          gameState = 'title';
-          titleFadeIn = 1;
+        // Переключаемся только когда загрузка полностью невидима
+        if (loadFadeOut >= 0.999) {
           loadFadeOut = 1;
+          titleFadeIn = 1;
+          gameState = 'title';
         }
       }
     }
@@ -3964,24 +3964,26 @@
 
       if (gameState === 'loading' || gameState === 'loadfade') {
         updateLoadingTransition();
-        if (gameState === 'loadfade') {
-          // Меню уже полное снизу, загрузка только растворяется сверху
-          drawTitleScreen();
-          const a = 1 - loadFadeOut;
-          if (a > 0.01) {
-            ctx.save();
-            ctx.globalAlpha = a;
-            drawLoadingScreen();
-            ctx.restore();
-          }
-        } else {
+      }
+      if (gameState === 'loading') {
+        drawLoadingScreen();
+        return;
+      }
+      if (gameState === 'loadfade') {
+        drawTitleScreen();
+        const a = 1 - loadFadeOut;
+        if (a > 0.02) {
+          ctx.save();
+          ctx.globalAlpha = a;
           drawLoadingScreen();
+          ctx.restore();
+          ctx.globalAlpha = 1;
         }
         return;
       }
 
       if (gameState === 'title') {
-        if (titleFadeIn < 1) titleFadeIn = 1;
+        titleFadeIn = 1;
         drawTitleScreen();
         return;
       }
