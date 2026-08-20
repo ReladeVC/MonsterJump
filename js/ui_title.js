@@ -168,8 +168,7 @@ function drawTitleScreen() {
   if ((charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) || charInfoTargetSlide > 0.5) {
     if (charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) {
       if (charInfoTargetSlide === 0) {
-        charInfoSlide -= 0.12;
-        if (charInfoSlide <= 0) { charInfoSlide = 0; charInfoTargetSlide = 0; charInfoPopup = -1; }
+        charInfoSlide = 0; charInfoTargetSlide = 0; charInfoPopup = -1;
       } else {
         charInfoSlide += (1 - charInfoSlide) * 0.15;
       }
@@ -324,11 +323,9 @@ function drawTitleScreen() {
 function drawSpiritShop() {
   if (!spiritShopOpen && spiritShopSlide < 0.01) return;
   if (spiritShopTargetSlide === 0) {
-    spiritShopSlide -= 0.12;
-    if (spiritShopSlide <= 0) { spiritShopSlide = 0; spiritShopOpen = false; return; }
-  } else {
-    spiritShopSlide += (1 - spiritShopSlide) * 0.15;
+    spiritShopSlide = 0; spiritShopOpen = false; return;
   }
+  spiritShopSlide += (1 - spiritShopSlide) * 0.15;
   var t = Math.min(1, Math.max(0, spiritShopSlide));
   var isSClose = spiritShopTargetSlide === 0;
   var scale = isSClose ? 1 : t;
@@ -396,11 +393,9 @@ function drawSpiritShop() {
 
 function drawTitleMenuPanel() {
   if (menuTargetSlide === 0) {
-    menuSlide -= 0.12;
-    if (menuSlide <= 0) { menuSlide = 0; titleMenu = null; return; }
-  } else {
-    menuSlide += (1 - menuSlide) * 0.15;
+    menuSlide = 0; titleMenu = null; return;
   }
+  menuSlide += (1 - menuSlide) * 0.15;
   var t = Math.min(1, Math.max(0, menuSlide));
   var pw = WIDTH, ph = HEIGHT;
   var ox = menuOriginX, oy = menuOriginY;
@@ -551,7 +546,7 @@ function drawTitleMenuPanel() {
     sy += rowH3 + 8;
     var rowH3b = 48;
     drawMenuPanelBg(rxx, sy, rw, rowH3b, 14);
-    drawOutlinedText('Вибро', rxx + rowPad, sy + rowH3b / 2, 'bold 15px Segoe UI, Arial', 'left');
+    drawOutlinedText('Вибрация', rxx + rowPad, sy + rowH3b / 2, 'bold 15px Segoe UI, Arial', 'left');
     var tx3 = rxx + rw - 70, ty3 = sy + (rowH3b - 28) / 2, tw3 = 56, th3 = 28;
     var tp3 = beginPressTransform(tx3, ty3, tw3, th3);
     drawToggle(tx3 + 4, ty3 + 1, vibrationEnabled);

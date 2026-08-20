@@ -94,7 +94,7 @@ var ASSETS = {
   close:           'assets/close.png',
   frame:           'assets/frame.png',
   menuitem:        'assets/menuitem.png',
-  wait:            'assets/wait.png',
+  wait:            'assets/wait.jpg',
   price:           'assets/price.png',
   backgroundmenu:  'assets/backgroundmenu.png',
   menuname:        'assets/menuname.png',

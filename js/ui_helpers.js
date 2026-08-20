@@ -28,6 +28,7 @@ var skinScrollX = 0;
 var skinScrollDrag = null;
 var skinHits = [];
 var titleInfoBtns = [];
+var sliderDrag = null;
 var spiritShopOpen = false;
 var spiritShopScrollY = 0;
 var spiritShopHits = [];
@@ -137,7 +138,7 @@ function initAssets() {
   closeImg = loadImageWithFallback(['assets/close.png','assets/Close.png']);
   frameImg = loadImageWithFallback(['assets/frame.png','assets/Frame.png']);
   menuItemImg = loadImageWithFallback(['assets/menuitem.png','assets/Menuitem.png','assets/menuItem.png']);
-  waitImg = loadImageWithFallback(['assets/wait.png','assets/Wait.png']);
+  waitImg = loadImageWithFallback(['assets/wait.jpg','assets/wait.png']);
   priceImg = loadImageWithFallback(['assets/price.png','assets/Price.png']);
   backgroundMenuImg = loadImageWithFallback(['assets/backgroundmenu.png','assets/Backgroundmenu.png']);
   menuNameImg = loadImageWithFallback(['assets/menuname.png','assets/Menuname.png']);

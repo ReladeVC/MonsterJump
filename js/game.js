@@ -552,7 +552,7 @@ function update() {
       var p = platforms[i];
       if (p.broken) continue;
       var screenY = p.y - cameraY;
-      if (screenY < -20 || screenY > HEIGHT + 10) continue;
+      if (screenY < -20 || screenY > HEIGHT - PLATFORM_HEIGHT - 10) continue;
       if (player.x + player.width > p.x + 8 && player.x < p.x + p.width - 8 && player.y + player.height > p.y && player.y + player.height < p.y + p.height + player.vy + 2) {
         player.y = p.y - player.height;
         var jumpMul = jumpBoostTimer > 0 ? 2 : 1;
@@ -754,8 +754,8 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'togMusic') toggleMusic();
         if (h.type === 'togSfx') { sfxEnabled = !sfxEnabled; saveMetaProgress(); }
         if (h.type === 'togVibro') { vibrationEnabled = !vibrationEnabled; saveMetaProgress(); }
-        if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); }
-        if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); }
+        if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; }
+        if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; }
         return;
       }
     }
@@ -923,8 +923,9 @@ function handleCheatCode(key) {
   if (cheatBuffer.indexOf('openall') !== -1) {
     for (var i = 0; i < 6; i++) unlockedChars[i] = true;
     maxLevelUnlocked = 100;
+    totalCoins += 100000; totalCrystals += 100000; totalRolls += 100000;
     saveProgress(); saveMetaProgress();
-    secretFlashTimer = 80; secretFlashText = 'ВСЕ УРОВНИ'; coinShake = 20; vibrate(30);
+    secretFlashTimer = 80; secretFlashText = '+100K ВСЕХ РЕСУРСОВ'; coinShake = 20; vibrate(30);
     cheatBuffer = ''; return true;
   }
   return false;
@@ -1005,6 +1006,20 @@ function registerCanvasEvents() {
       skinScrollX = Math.max(0, skinScrollDrag.scroll + dx4);
       skinScrollDrag.lastX = p4.x; return;
     }
+    if (sliderDrag && gameState === 'title') {
+      var ps = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+      var hts = titleLayout._menuHits;
+      for (var si = 0; si < hts.length; si++) {
+        var hs = hts[si];
+        if ((sliderDrag === 'music' && hs.type === 'slMusic') || (sliderDrag === 'sfx' && hs.type === 'slSfx')) {
+          var val = Math.max(0, Math.min(1, (ps.x - hs.x) / hs.w));
+          if (sliderDrag === 'music') { musicVol = val; music.volume = musicVol; }
+          else sfxVol = val;
+          saveMetaProgress(); break;
+        }
+      }
+      return;
+    }
     if (gameState !== 'playing' || isPaused || touchX === null) return;
     var p3 = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
     var currentY = e.touches[0].clientY;
@@ -1056,13 +1071,17 @@ function registerCanvasEvents() {
   });
 
   canvas.addEventListener('touchend', function(e) {
+    var wasSliderDrag = !!sliderDrag;
     if (skinScrollDrag) { skinScrollDrag = null; }
+    if (sliderDrag) { sliderDrag = null; }
     if (levelDrag) { levelDidScroll = !!levelDrag.moved; levelDrag = null; }
     if (missionDrag) { missionDidScroll = !!missionDrag.moved; missionDrag = null; }
     if (e.changedTouches.length > 0) {
       var t = e.changedTouches[0];
-      if (gameState === 'title') { e.preventDefault(); handleTitleClick(t.clientX, t.clientY); }
-      else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') { e.preventDefault(); handleGameClick(t.clientX, t.clientY); }
+      if (!wasSliderDrag) {
+        if (gameState === 'title') { e.preventDefault(); handleTitleClick(t.clientX, t.clientY); }
+        else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') { e.preventDefault(); handleGameClick(t.clientX, t.clientY); }
+      }
     }
     touchX = null; touchY = null;
     if (gameState === 'playing') { keys.left = false; keys.right = false; keys.up = false; keys.down = false; }
@@ -1091,6 +1110,20 @@ window.addEventListener('mousemove', function(e) {
     missionScrollY = Math.max(0, Math.min(missionScrollMax, missionDrag.scroll - dy2));
     missionScrollV = missionDrag.lastY - p2.y; missionDrag.lastY = p2.y; return;
   }
+  if (sliderDrag && gameState === 'title') {
+    var p = canvasToGame(e.clientX, e.clientY);
+    var hts = titleLayout._menuHits;
+    for (var si = 0; si < hts.length; si++) {
+      var hs = hts[si];
+      if ((sliderDrag === 'music' && hs.type === 'slMusic') || (sliderDrag === 'sfx' && hs.type === 'slSfx')) {
+        var val = Math.max(0, Math.min(1, (p.x - hs.x) / hs.w));
+        if (sliderDrag === 'music') { musicVol = val; music.volume = musicVol; }
+        else sfxVol = val;
+        saveMetaProgress(); break;
+      }
+    }
+    return;
+  }
   if (!mouseDown || gameState !== 'playing') return;
   var p3 = canvasToGame(e.clientX, e.clientY);
   keys.left = p3.x < WIDTH / 2; keys.right = !keys.left;
@@ -1098,6 +1131,7 @@ window.addEventListener('mousemove', function(e) {
 
 window.addEventListener('mouseup', function() {
   if (skinScrollDrag) { skinScrollDrag = null; }
+  if (sliderDrag) { sliderDrag = null; }
   if (levelDrag) { levelDidScroll = !!levelDrag.moved; levelDrag = null; }
   if (missionDrag) { missionDidScroll = !!missionDrag.moved; missionDrag = null; }
   mouseDown = false;

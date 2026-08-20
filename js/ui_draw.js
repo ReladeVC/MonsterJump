@@ -127,8 +127,8 @@ function drawSpirit() {
   cy = (player.y - cameraY) + player.height - PLAYER_HEIGHT * 0.7;
   var time = Date.now() / 300;
   var hoverY = Math.sin(time) * 6;
-  var offsetX = 40;
-  var offsetY = -40 + hoverY;
+  var offsetX = 45 * bonusVisualScale;
+  var offsetY = -45 * bonusVisualScale + hoverY;
   var cos = Math.cos(playerTilt);
   var sin = Math.sin(playerTilt);
   var spiritX = cx + (offsetX * cos - offsetY * sin);
