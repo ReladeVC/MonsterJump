@@ -963,14 +963,20 @@ function registerCanvasEvents() {
     }
     if (gameState === 'title' && titleMenu === 'settings') {
       var pt = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+      var mpx2 = pt.x, mpy2 = pt.y;
+      if (menuSlide > 0.02) {
+        var ms2 = Math.max(0.01, menuSlide);
+        mpx2 = menuOriginX + (mpx2 - menuOriginX) / ms2;
+        mpy2 = menuOriginY + (mpy2 - menuOriginY) / ms2;
+      }
       var hts = titleLayout._menuHits;
       for (var i = 0; i < hts.length; i++) {
         var h = hts[i];
-        if (h.type === 'slMusic' && pt.x >= h.x && pt.x <= h.x + h.w && pt.y >= h.y && pt.y <= h.y + h.h) {
-          musicVol = Math.max(0, Math.min(1, (pt.x - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+        if (h.type === 'slMusic' && mpx2 >= h.x && mpx2 <= h.x + h.w && mpy2 >= h.y && mpy2 <= h.y + h.h) {
+          musicVol = Math.max(0, Math.min(1, (mpx2 - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
         }
-        if (h.type === 'slSfx' && pt.x >= h.x && pt.x <= h.x + h.w && pt.y >= h.y && pt.y <= h.y + h.h) {
-          sfxVol = Math.max(0, Math.min(1, (pt.x - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+        if (h.type === 'slSfx' && mpx2 >= h.x && mpx2 <= h.x + h.w && mpy2 >= h.y && mpy2 <= h.y + h.h) {
+          sfxVol = Math.max(0, Math.min(1, (mpx2 - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
         }
       }
       return;
@@ -1022,11 +1028,17 @@ function registerCanvasEvents() {
     }
     if (sliderDrag && gameState === 'title') {
       var ps = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+      var mpx4 = ps.x, mpy4 = ps.y;
+      if (menuSlide > 0.02) {
+        var ms4 = Math.max(0.01, menuSlide);
+        mpx4 = menuOriginX + (mpx4 - menuOriginX) / ms4;
+        mpy4 = menuOriginY + (mpy4 - menuOriginY) / ms4;
+      }
       var hts = titleLayout._menuHits;
       for (var si = 0; si < hts.length; si++) {
         var hs = hts[si];
         if ((sliderDrag === 'music' && hs.type === 'slMusic') || (sliderDrag === 'sfx' && hs.type === 'slSfx')) {
-          var val = Math.max(0, Math.min(1, (ps.x - hs.x) / hs.w));
+          var val = Math.max(0, Math.min(1, (mpx4 - hs.x) / hs.w));
           if (sliderDrag === 'music') { musicVol = val; music.volume = musicVol; }
           else sfxVol = val;
           saveMetaProgress(); break;
@@ -1053,15 +1065,21 @@ function registerCanvasEvents() {
         }
         return;
       }
+      var mpx = p.x, mpy = p.y;
+      if (titleMenu && menuSlide > 0.02) {
+        var ms = Math.max(0.01, menuSlide);
+        mpx = menuOriginX + (mpx - menuOriginX) / ms;
+        mpy = menuOriginY + (mpy - menuOriginY) / ms;
+      }
       if (titleMenu === 'settings') {
         var hts = titleLayout._menuHits;
         for (var i = 0; i < hts.length; i++) {
           var h = hts[i];
-          if (h.type === 'slMusic' && p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
-            musicVol = Math.max(0, Math.min(1, (p.x - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+          if (h.type === 'slMusic' && mpx >= h.x && mpx <= h.x + h.w && mpy >= h.y && mpy <= h.y + h.h) {
+            musicVol = Math.max(0, Math.min(1, (mpx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
           }
-          if (h.type === 'slSfx' && p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
-            sfxVol = Math.max(0, Math.min(1, (p.x - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+          if (h.type === 'slSfx' && mpx >= h.x && mpx <= h.x + h.w && mpy >= h.y && mpy <= h.y + h.h) {
+            sfxVol = Math.max(0, Math.min(1, (mpx - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
           }
         }
       }
@@ -1138,11 +1156,17 @@ window.addEventListener('mousemove', function(e) {
   }
   if (sliderDrag && gameState === 'title') {
     var p = canvasToGame(e.clientX, e.clientY);
+    var mpx3 = p.x, mpy3 = p.y;
+    if (menuSlide > 0.02) {
+      var ms3 = Math.max(0.01, menuSlide);
+      mpx3 = menuOriginX + (mpx3 - menuOriginX) / ms3;
+      mpy3 = menuOriginY + (mpy3 - menuOriginY) / ms3;
+    }
     var hts = titleLayout._menuHits;
     for (var si = 0; si < hts.length; si++) {
       var hs = hts[si];
       if ((sliderDrag === 'music' && hs.type === 'slMusic') || (sliderDrag === 'sfx' && hs.type === 'slSfx')) {
-        var val = Math.max(0, Math.min(1, (p.x - hs.x) / hs.w));
+        var val = Math.max(0, Math.min(1, (mpx3 - hs.x) / hs.w));
         if (sliderDrag === 'music') { musicVol = val; music.volume = musicVol; }
         else sfxVol = val;
         saveMetaProgress(); break;

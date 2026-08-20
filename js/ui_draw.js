@@ -506,6 +506,13 @@ function drawLoadingScreen() {
   var veil = ctx.createLinearGradient(0, HEIGHT * 0.55, 0, HEIGHT);
   veil.addColorStop(0, 'rgba(0,0,0,0)'); veil.addColorStop(1, 'rgba(0,0,0,0.45)');
   ctx.fillStyle = veil; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  if (isImageReady(titleNameImg)) {
+    var maxW = WIDTH * 0.85;
+    var aspect = titleNameImg.naturalWidth / titleNameImg.naturalHeight;
+    var tw = maxW, th = tw / aspect;
+    if (th > 140) { th = 140; tw = th * aspect; }
+    ctx.drawImage(titleNameImg, (WIDTH - tw) / 2, 80, tw, th);
+  }
   var progress = loadVisualProgress;
   var pulse = 0.5 + 0.5 * Math.sin(performance.now() / 450);
   drawOutlinedText('Загрузка', WIDTH / 2, HEIGHT - 88, 'bold 16px Segoe UI, Arial', 'center');
