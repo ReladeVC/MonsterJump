@@ -754,8 +754,8 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'togMusic') toggleMusic();
         if (h.type === 'togSfx') { sfxEnabled = !sfxEnabled; saveMetaProgress(); }
         if (h.type === 'togVibro') { vibrationEnabled = !vibrationEnabled; saveMetaProgress(); }
-        if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; }
-        if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; }
+        if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); }
+        if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); }
         return;
       }
     }
@@ -961,6 +961,20 @@ function registerCanvasEvents() {
       }
       return;
     }
+    if (gameState === 'title' && titleMenu === 'settings') {
+      var pt = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+      var hts = titleLayout._menuHits;
+      for (var i = 0; i < hts.length; i++) {
+        var h = hts[i];
+        if (h.type === 'slMusic' && pt.x >= h.x && pt.x <= h.x + h.w && pt.y >= h.y && pt.y <= h.y + h.h) {
+          musicVol = Math.max(0, Math.min(1, (pt.x - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+        }
+        if (h.type === 'slSfx' && pt.x >= h.x && pt.x <= h.x + h.w && pt.y >= h.y && pt.y <= h.y + h.h) {
+          sfxVol = Math.max(0, Math.min(1, (pt.x - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+        }
+      }
+      return;
+    }
     if (gameState === 'title' && (titleMenu === 'levels' || titleMenu === 'missions')) {
       var p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
       if (titleMenu === 'levels') {
@@ -1038,6 +1052,18 @@ function registerCanvasEvents() {
           skinScrollDrag = { x: p.x, scroll: skinScrollX, lastX: p.x, moved: false };
         }
         return;
+      }
+      if (titleMenu === 'settings') {
+        var hts = titleLayout._menuHits;
+        for (var i = 0; i < hts.length; i++) {
+          var h = hts[i];
+          if (h.type === 'slMusic' && p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
+            musicVol = Math.max(0, Math.min(1, (p.x - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+          }
+          if (h.type === 'slSfx' && p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
+            sfxVol = Math.max(0, Math.min(1, (p.x - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+          }
+        }
       }
       if (titleMenu === 'levels') {
         var clip = titleLayout._levelClip;
