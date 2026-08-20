@@ -68,7 +68,7 @@ function drawPlatform(p) {
     else { ctx.moveTo(ax + 5, ay - 5); ctx.lineTo(ax - 4, ay); ctx.lineTo(ax + 5, ay + 5); }
     ctx.closePath(); ctx.fill();
   }
-  if (p.type === 'spring' && isImageReady(springImg)) {
+  if (p.type === 'spring' && isImageReady(springImg) && screenY <= HEIGHT) {
     var springW = Math.min(42, p.width * 0.55);
     var aspect = springImg.naturalHeight / springImg.naturalWidth;
     var springH = springW * aspect;

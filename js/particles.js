@@ -532,8 +532,8 @@ function updateWarpEffect() {
     if (Math.random() < 0.6) {
       var a = Math.random() * Math.PI * 2;
       warpOrbits.push({
-        angle: a, dist: 20 + Math.random() * 30,
-        size: 1.5 + Math.random() * 2.5,
+        angle: a, dist: 35 + Math.random() * 45,
+        size: 2 + Math.random() * 3.5,
         speed: 0.08 + Math.random() * 0.12,
         life: 30 + Math.random() * 20, maxLife: 50,
         orbitDir: Math.random() < 0.5 ? 1 : -1,
@@ -553,7 +553,7 @@ function updateWarpEffect() {
     }
     if (Math.random() < 0.08) {
       warpRings.push({
-        dist: 10, maxDist: 40 + Math.random() * 40,
+        dist: 15, maxDist: 60 + Math.random() * 50,
         life: 25 + Math.random() * 15, maxLife: 40,
         width: 1.5 + Math.random() * 1.5
       });
@@ -602,13 +602,13 @@ function updateWarpEffect() {
 function drawWarpEffect() {
   if (warpPulse < 0.01 && warpOrbits.length === 0 && warpSpeedLines.length === 0) return;
   var pcx = player.x + player.width / 2;
-  var pcy = (player.y + player.height * 0.4) - cameraY;
+  var pcy = (player.y + player.height * 0.5) - cameraY;
   var t = performance.now() / 1000;
   var inten = Math.min(1, warpPulse);
   ctx.save();
   ctx.translate(pcx, pcy);
   if (inten > 0.05) {
-    var coreR = 30 + Math.sin(t * 6) * 5;
+    var coreR = 50 + Math.sin(t * 6) * 8;
     var coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
     coreGrad.addColorStop(0, 'rgba(150, 220, 255, ' + (inten * 0.5) + ')');
     coreGrad.addColorStop(0.4, 'rgba(80, 160, 255, ' + (inten * 0.25) + ')');
@@ -620,13 +620,13 @@ function drawWarpEffect() {
     ctx.fill();
   }
   if (inten > 0.15) {
-    var pulseR = 22 + Math.sin(t * 12) * 8;
+    var pulseR = 38 + Math.sin(t * 12) * 10;
     ctx.strokeStyle = 'rgba(100, 200, 255, ' + (inten * 0.35) + ')';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
     ctx.stroke();
-    var pulseR2 = 18 + Math.cos(t * 15) * 6;
+    var pulseR2 = 32 + Math.cos(t * 15) * 8;
     ctx.strokeStyle = 'rgba(180, 230, 255, ' + (inten * 0.2) + ')';
     ctx.lineWidth = 1;
     ctx.beginPath();
