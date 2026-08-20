@@ -58,7 +58,7 @@ function drawTitleScreen() {
   if (isImageReady(spiritIconImg)) ctx.drawImage(spiritIconImg, -spiritBtnSize / 2 - 4, -spiritBtnSize / 2 - 4, spiritBtnSize + 8, spiritBtnSize + 8);
   else { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.arc(0, 0, spiritBtnSize / 2 + 4, 0, Math.PI * 2); ctx.fill(); }
   if (selectedSpirit >= 0 && unlockedSpirits[selectedSpirit] && isImageReady(spiritImgs[selectedSpirit])) {
-    ctx.globalAlpha = 0.8; ctx.drawImage(spiritImgs[selectedSpirit], -spiritBtnSize / 2, -spiritBtnSize / 2, spiritBtnSize, spiritBtnSize);
+    ctx.drawImage(spiritImgs[selectedSpirit], -spiritBtnSize / 2, -spiritBtnSize / 2, spiritBtnSize, spiritBtnSize);
   } else {
     ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.font = '30px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('+', 0, 0);
