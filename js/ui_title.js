@@ -167,19 +167,25 @@ function drawTitleScreen() {
   if (titleMenu) drawTitleMenuPanel();
   if ((charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) || charInfoTargetSlide > 0.5) {
     if (charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) {
-      charInfoSlide += (charInfoTargetSlide - charInfoSlide) * 0.15;
-      if (charInfoTargetSlide === 0 && charInfoSlide < 0.02) { charInfoSlide = 0; charInfoTargetSlide = 0; charInfoPopup = -1; }
+      if (charInfoTargetSlide === 0) {
+        charInfoSlide -= 0.12;
+        if (charInfoSlide <= 0) { charInfoSlide = 0; charInfoTargetSlide = 0; charInfoPopup = -1; }
+      } else {
+        charInfoSlide += (1 - charInfoSlide) * 0.15;
+      }
     }
     if (charInfoPopup >= 0 && charInfoPopup < CHAR_INFO.length) {
       popupFade = Math.min(1, popupFade + 0.1) * charInfoSlide;
       var info = CHAR_INFO[charInfoPopup];
       var cis = Math.min(1, Math.max(0, charInfoSlide));
+      var isInfoClosing = charInfoTargetSlide === 0;
+      var infoScale = isInfoClosing ? 1 : cis;
+      var infoAlpha = isInfoClosing ? cis : cis;
       var ox = charInfoOriginX, oy = charInfoOriginY;
-      ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * popupFade) + ')'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * infoAlpha) + ')'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
       ctx.save();
-      ctx.translate(ox, oy);
-      ctx.scale(cis, cis);
-      ctx.translate(-ox, -oy);
+      ctx.globalAlpha = infoAlpha;
+      if (!isInfoClosing) { ctx.translate(ox, oy); ctx.scale(infoScale, infoScale); ctx.translate(-ox, -oy); }
       var pw = Math.min(300, WIDTH - 30), ph = 320;
       var px = (WIDTH - pw) / 2, py = (HEIGHT - ph) / 2 - 10;
       ctx.globalAlpha = popupFade;
@@ -317,19 +323,21 @@ function drawTitleScreen() {
 
 function drawSpiritShop() {
   if (!spiritShopOpen && spiritShopSlide < 0.01) return;
-  spiritShopSlide += (spiritShopTargetSlide - spiritShopSlide) * 0.15;
-  if (spiritShopTargetSlide === 0 && spiritShopSlide < 0.02) { spiritShopSlide = 0; spiritShopOpen = false; return; }
-  var t = Math.min(1, spiritShopSlide);
-  var fitScale = Math.min(spiritShopOriginW / WIDTH, spiritShopOriginH / HEIGHT);
-  var scale = spiritShopTargetSlide === 0 ? (fitScale + (1 - fitScale) * t) : t;
-  var alpha = spiritShopTargetSlide === 0 ? (t > 0.5 ? 1 : t * 2) : t;
+  if (spiritShopTargetSlide === 0) {
+    spiritShopSlide -= 0.12;
+    if (spiritShopSlide <= 0) { spiritShopSlide = 0; spiritShopOpen = false; return; }
+  } else {
+    spiritShopSlide += (1 - spiritShopSlide) * 0.15;
+  }
+  var t = Math.min(1, Math.max(0, spiritShopSlide));
+  var isSClose = spiritShopTargetSlide === 0;
+  var scale = isSClose ? 1 : t;
+  var alpha = isSClose ? t : t;
   popupFade = Math.min(1, popupFade + 0.12) * alpha;
   var ox = spiritShopOriginX, oy = spiritShopOriginY;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.translate(ox, oy);
-  ctx.scale(scale, scale);
-  ctx.translate(-ox, -oy);
+  if (!isSClose) { ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.translate(-ox, -oy); }
   if (isImageReady(backgroundMenuImg)) ctx.drawImage(backgroundMenuImg, 0, 0, WIDTH, HEIGHT);
   else if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, WIDTH, HEIGHT);
   else { ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
@@ -387,57 +395,24 @@ function drawSpiritShop() {
 }
 
 function drawTitleMenuPanel() {
-  menuSlide += (menuTargetSlide - menuSlide) * 0.15;
-  if (menuTargetSlide === 0 && menuSlide < 0.02) { menuSlide = 0; titleMenu = null; return; }
-  var t = Math.min(1, menuSlide);
+  if (menuTargetSlide === 0) {
+    menuSlide -= 0.12;
+    if (menuSlide <= 0) { menuSlide = 0; titleMenu = null; return; }
+  } else {
+    menuSlide += (1 - menuSlide) * 0.15;
+  }
+  var t = Math.min(1, Math.max(0, menuSlide));
   var pw = WIDTH, ph = HEIGHT;
   var ox = menuOriginX, oy = menuOriginY;
   var isClosing = menuTargetSlide === 0;
-  var progress = 1 - t;
-  var alpha = isClosing ? (t > 0.5 ? 1 : t * 2) : (t < 0.5 ? t * 2 : 1);
+  var scale = isClosing ? 1 : t;
+  var alpha = isClosing ? t : (t < 0.15 ? t / 0.15 : 1);
   ctx.save();
   ctx.globalAlpha = alpha;
-  if (isClosing) {
-    if (progress < 0.01) {
-      ctx.beginPath(); ctx.rect(0, 0, pw, ph); ctx.clip();
-    } else {
-      var topW = pw * (1 - progress * 0.98);
-      var botW = pw * (1 - progress);
-      var topY = oy * progress;
-      var botY = ph - (ph - oy) * progress;
-      var topLx = ox - topW / 2, topRx = ox + topW / 2;
-      var botLx = ox - botW / 2, botRx = ox + botW / 2;
-      ctx.beginPath();
-      ctx.moveTo(topLx, topY);
-      ctx.bezierCurveTo(topLx + (ox - topLx) * progress * 0.6, topY + (botY - topY) * 0.4 * progress, botLx + (ox - botLx) * progress * 0.3, botY - (botY - topY) * 0.15 * progress, botLx, botY);
-      ctx.lineTo(botRx, botY);
-      ctx.bezierCurveTo(botRx + (ox - botRx) * progress * 0.3, botY - (botY - topY) * 0.15 * progress, topRx + (ox - topRx) * progress * 0.6, topY + (botY - topY) * 0.4 * progress, topRx, topY);
-      ctx.closePath();
-      ctx.clip();
-    }
-    if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, pw, ph);
-    else { ctx.fillStyle = 'rgba(22, 24, 40, 1)'; ctx.fillRect(0, 0, pw, ph); }
-    ctx.fillStyle = 'rgba(8, 10, 24, 0.35)'; ctx.fillRect(0, 0, pw, ph);
-    if (progress > 0.01) {
-      var grad = ctx.createLinearGradient(0, 0, 0, ph);
-      grad.addColorStop(0, 'rgba(0,0,0,1)');
-      var fs = Math.max(0.01, t - 0.2), fe = Math.min(1, t + 0.08);
-      grad.addColorStop(fs, 'rgba(0,0,0,1)');
-      grad.addColorStop(fe, 'rgba(0,0,0,0)');
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, pw, ph);
-      ctx.globalCompositeOperation = 'source-over';
-    }
-  } else {
-    var s = t;
-    ctx.translate(ox, oy);
-    ctx.scale(s, s);
-    ctx.translate(-ox, -oy);
-    if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, pw, ph);
-    else { ctx.fillStyle = 'rgba(22, 24, 40, 1)'; ctx.fillRect(0, 0, pw, ph); }
-    ctx.fillStyle = 'rgba(8, 10, 24, 0.35)'; ctx.fillRect(0, 0, pw, ph);
-  }
+  if (!isClosing) { ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.translate(-ox, -oy); }
+  if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, pw, ph);
+  else { ctx.fillStyle = 'rgba(22, 24, 40, 1)'; ctx.fillRect(0, 0, pw, ph); }
+  ctx.fillStyle = 'rgba(8, 10, 24, 0.35)'; ctx.fillRect(0, 0, pw, ph);
   var titles = { levels: 'Уровни', missions: 'Задания', settings: 'Настройки' };
   drawMenuTitle(titles[titleMenu] || '', pw / 2, 36, 220, 48);
   var ccx = pw - 28, ccy = 28;

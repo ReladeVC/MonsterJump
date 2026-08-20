@@ -151,7 +151,6 @@ function collectCoin(c) {
   playCoinSound();
   spawnCoinParticles(c.x + c.width / 2, c.y + c.height / 2);
   spawnCoinPopup(c.x + c.width / 2, c.y - 10, amount);
-  vibrate(8);
 }
 
 function buyBonus(which) {

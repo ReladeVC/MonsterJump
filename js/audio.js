@@ -241,5 +241,18 @@ function toggleMusic() {
 
 function vibrate(ms) {
   if (!vibrationEnabled) return;
-  try { if (navigator.vibrate) navigator.vibrate(ms || 15); } catch (e) {}
+  try {
+    if (navigator.vibrate) { navigator.vibrate(ms || 15); return; }
+    if (window.AudioContext || window.webkitAudioContext) {
+      var ac = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.connect(gain); gain.connect(ac.destination);
+      osc.frequency.value = 1;
+      osc.type = 'sine';
+      gain.gain.value = 0;
+      osc.start(); osc.stop(ac.currentTime + (ms || 15) / 1000);
+      setTimeout(function() { try { ac.close(); } catch(e) {} }, 100);
+    }
+  } catch (e) {}
 }
