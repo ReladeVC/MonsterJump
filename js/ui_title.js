@@ -51,8 +51,8 @@ function drawTitleScreen() {
     ctx.arc(rollX + 20, tTop + tBarH / 2 + coinOy, 12, 0, Math.PI * 2); ctx.fill();
   }
   drawResourceText('× ', totalRolls, rollX + tIcon + 10, tTop + tBarH / 2 + coinOy, resTextMax);
-  drawOutlinedText('Выбери персонажа', WIDTH / 2, 192, 'bold 16px Segoe UI, Arial', 'center');
-  var spiritBtnSize = 60, spiritBtnX = WIDTH - 40, spiritBtnY = 200;
+  drawOutlinedText('Выбери персонажа', WIDTH / 2, 222, 'bold 16px Segoe UI, Arial', 'center');
+  var spiritBtnSize = 60, spiritBtnX = WIDTH - 40, spiritBtnY = 205;
   titleLayout._spiritBtn = { x: spiritBtnX - spiritBtnSize / 2, y: spiritBtnY - spiritBtnSize / 2, w: spiritBtnSize, h: spiritBtnSize };
   ctx.save(); ctx.translate(spiritBtnX, spiritBtnY);
   if (isImageReady(spiritIconImg)) ctx.drawImage(spiritIconImg, -spiritBtnSize / 2 - 4, -spiritBtnSize / 2 - 4, spiritBtnSize + 8, spiritBtnSize + 8);
@@ -180,14 +180,14 @@ function drawTitleScreen() {
       ctx.translate(ox, oy);
       ctx.scale(cis, cis);
       ctx.translate(-ox, -oy);
-      var pw = Math.min(300, WIDTH - 30), ph = 520;
+      var pw = Math.min(300, WIDTH - 30), ph = 320;
       var px = (WIDTH - pw) / 2, py = (HEIGHT - ph) / 2 - 10;
       ctx.globalAlpha = popupFade;
       drawMenuPanelBg(px, py, pw, ph, 16);
       var ci = charInfoPopup;
       var lvl = charLevels[ci] || 1;
 
-      var ccx = px + pw - 24, ccy = py + 20;
+      var ccx = px + pw - 24, ccy = py + 30;
       drawOutlinedText('×', ccx, ccy, 'bold 20px Segoe UI, Arial', 'center');
       titleLayout._infoClose = { x: ccx - 14, y: ccy - 14, w: 28, h: 28 };
 
@@ -201,14 +201,13 @@ function drawTitleScreen() {
         ctx.drawImage(cimg, avX + (av - cdw) / 2, avY + (av - cdh) / 2, cdw, cdh);
       }
       var textCX = px + pw / 2;
-      var nameY = py + 40;
+      var nameY = py + 50;
       drawOutlinedText(info.name, textCX, nameY, 'bold 18px Segoe UI, Arial', 'center');
       drawOutlinedText('Ур: ' + lvl + '  |  ' + info.label, textCX, nameY + 18, 'bold 12px Segoe UI, Arial', 'center');
 
-      ctx.fillStyle = TEXT_COL; ctx.font = '12px Segoe UI, Arial'; ctx.textAlign = 'center';
       var lines = wrapTextStrict(info.desc, pw - 30, 12);
-      var descY = nameY + 136;
-      for (var li = 0; li < lines.length; li++) { ctx.fillText(lines[li], textCX, descY); descY += 15; }
+      var descY = nameY + 61;
+      for (var li = 0; li < lines.length; li++) { drawOutlinedText(lines[li], textCX, descY, '12px Segoe UI, Arial', 'center'); descY += 15; }
 
       var skinY = descY + 10;
       drawOutlinedText('Скины:', textCX, skinY, 'bold 12px Segoe UI, Arial', 'center');
@@ -282,24 +281,23 @@ function drawTitleScreen() {
       drawOutlinedText('Выбран: ' + curLabel, textCX, skinY + skinRowH + 12, 'bold 11px Segoe UI, Arial', 'center');
 
       var upY = skinY + skinRowH + 42;
-      var upW = Math.min(220, pw - 30), upH = 34;
-      var upX = px + (pw - upW) / 2;
+      var rstBtnSize = 34;
+      var upW = Math.min(160, pw - rstBtnSize - 34), upH = 34;
+      var upX = px + (pw - upW - rstBtnSize - 6) / 2;
       var atMax = lvl >= 99;
       var canUp = isCharUnlocked(ci) && totalCrystals >= CHAR_UPGRADE_COST && !atMax;
       drawKeycapBtn(upX, upY, upW, upH, '', TEXT_COL);
       if (isImageReady(crystalImg) && !atMax) ctx.drawImage(crystalImg, upX + 10, upY + (upH - 18) / 2, 18, 18);
-      var upLabel = atMax ? 'МАКС. УР. 99' : ('Улучшить  × ' + CHAR_UPGRADE_COST);
-      drawOutlinedText(upLabel, upX + upW / 2 + (atMax ? 0 : 6), upY + upH / 2, 'bold 12px Segoe UI, Arial', 'center');
+      var upLabel = atMax ? 'МАКС. УР. 99' : ('Улучшить ×' + CHAR_UPGRADE_COST);
+      drawOutlinedText(upLabel, upX + upW / 2 + (atMax ? 0 : 4), upY + upH / 2, 'bold 11px Segoe UI, Arial', 'center');
       if (!canUp) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(upX, upY, upW, upH, 8); ctx.fill(); }
-      drawOutlinedText('Падение −' + fallReducePercent(ci) + '%', textCX, upY - 6, 'bold 10px Segoe UI, Arial', 'center');
+      drawOutlinedText('Падение −' + fallReducePercent(ci) + '%', upX + upW / 2, upY - 6, 'bold 10px Segoe UI, Arial', 'center');
       titleLayout._infoUpgrade = { x: upX, y: upY, w: upW, h: upH, i: ci };
 
-      var rstW = upW, rstH = 28, rstX = upX, rstY = upY + upH + 6;
+      var rstX = upX + upW + 6, rstY = upY, rstW = rstBtnSize, rstH = rstBtnSize;
       var canReset = lvl > 1;
       drawKeycapBtn(rstX, rstY, rstW, rstH, '', '#a33');
-      var refund = (lvl - 1) * CHAR_UPGRADE_COST;
-      var rstLabel = canReset ? ('Сброс (вернёт ' + formatResource(refund) + ')') : 'Уже макс.';
-      drawOutlinedText(rstLabel, rstX + rstW / 2, rstY + rstH / 2, 'bold 11px Segoe UI, Arial', 'center');
+      drawOutlinedText('↻', rstX + rstW / 2, rstY + rstH / 2 + 1, 'bold 18px Segoe UI, Arial', 'center');
       if (!canReset) { ctx.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(rstX, rstY, rstW, rstH, 8); ctx.fill(); }
       titleLayout._infoReset = { x: rstX, y: rstY, w: rstW, h: rstH, i: ci };
 

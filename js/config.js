@@ -174,8 +174,8 @@ var MISSIONS = [
 ];
 
 var titleLayout = {
-  charSize: 72, charY: 248, charGap: 28, rowGap: 158,
-  startBtnW: 180, startBtnH: 70, startBtnY: 590,
+  charSize: 72, charY: 278, charGap: 28, rowGap: 158,
+  startBtnW: 180, startBtnH: 70, startBtnY: 618,
   _buyBtns: [], _spiritBtn: null
 };
 
