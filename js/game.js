@@ -13,7 +13,7 @@ var introActive = false, introTimer = 0, introLaunched = false;
 var invincibleTimer = 0, dyingTimer = 0, onPlatform = false;
 var extraLifeReady = false, shieldAngle = 0, shieldVisualScale = 0;
 var swipeStartX = null, swipeStartY = null, swipeActive = false;
-var gyroAlpha = 0, gyroEnabled = false;
+var gyroAlpha = 0, gyroEnabled = false, gyroGamma = 0;
 var cdBonus1 = 0, cdBonus2 = 0, cdBonus3 = 0;
 var bonus2FromItem = false, bonus2CdPending = false, bonus2LandArmed = false, jumpBoostTimer = 0;
 var currentPlayerImg = null;
@@ -1121,6 +1121,7 @@ function registerCanvasEvents() {
     if (gameState !== 'playing' || isPaused) return;
     var p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
     if (isHudClick(p.x, p.y)) return;
+    if (controlType === 'gyro' && !gyroEnabled) requestGyroPermission();
     if (controlType === 'tap') {
       touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
       keys.left = p.x < WIDTH / 2; keys.right = !keys.left;
@@ -1174,17 +1175,19 @@ function registerCanvasEvents() {
     }
     if (gameState !== 'playing' || isPaused) return;
     if (controlType !== 'swipe' && touchX === null) return;
-    var p3 = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
     if (controlType === 'tap') {
+      var p3 = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
       var currentY = e.touches[0].clientY;
       var dy3 = touchY != null ? currentY - touchY : 0;
       if (Math.abs(dy3) > 28) { if (dy3 > 0) { keys.down = true; keys.up = false; } else { keys.up = true; keys.down = false; } touchY = currentY; }
       keys.left = p3.x < WIDTH / 2; keys.right = !keys.left;
       touchX = e.touches[0].clientX;
-    } else if (controlType === 'swipe' && swipeActive && swipeStartX !== null) {
-      var dx = e.touches[0].clientX - swipeStartX;
-      var deadzone = 15;
-      if (Math.abs(dx) > deadzone) { keys.left = dx < 0; keys.right = dx > 0; }
+    } else if (controlType === 'swipe') {
+      var fingerX = e.touches[0].clientX;
+      var screenMid = window.innerWidth / 2;
+      var deadzone = 20;
+      var dist = fingerX - screenMid;
+      if (Math.abs(dist) > deadzone) { keys.left = dist < 0; keys.right = dist > 0; }
       else { keys.left = false; keys.right = false; }
     }
   }, { passive: false });
@@ -1350,7 +1353,8 @@ window.addEventListener('mouseup', function() {
 function handleGyro(e) {
   if (controlType !== 'gyro' || gameState !== 'playing' || isPaused) { keys.left = false; keys.right = false; return; }
   var gamma = e.gamma || 0;
-  var deadzone = 6;
+  gyroGamma = gamma;
+  var deadzone = 3;
   if (gamma < -deadzone) { keys.left = true; keys.right = false; }
   else if (gamma > deadzone) { keys.right = true; keys.left = false; }
   else { keys.left = false; keys.right = false; }
@@ -1368,11 +1372,11 @@ function requestGyroPermission() {
   }
 }
 
-function requestGyroOnInteraction() {
-  if (controlType === 'gyro' && !gyroEnabled) requestGyroPermission();
+function requestGyroOnInteraction(e) {
+  if (controlType === 'gyro' && !gyroEnabled) {
+    requestGyroPermission();
+  }
 }
-window.addEventListener('touchstart', requestGyroOnInteraction, { once: false });
-window.addEventListener('mousedown', requestGyroOnInteraction, { once: false });
 
 function updateLoadingTransition() {
   checkAssetsReady();
