@@ -12,7 +12,7 @@ var pauseBeforeSettings = false;
 var introActive = false, introTimer = 0, introLaunched = false;
 var invincibleTimer = 0, dyingTimer = 0, onPlatform = false;
 var extraLifeReady = false, shieldAngle = 0, shieldVisualScale = 0;
-var swipeStartX = null, swipeStartY = null, swipeActive = false;
+var swipeStartX = null, swipeStartY = null, swipeActive = false, swipeDir = 0;
 var gyroAlpha = 0, gyroEnabled = false, gyroGamma = 0, gyroMoveX = 0, gyroOffset = null;
 var cdBonus1 = 0, cdBonus2 = 0, cdBonus3 = 0;
 var bonus2FromItem = false, bonus2CdPending = false, bonus2LandArmed = false, jumpBoostTimer = 0;
@@ -1128,8 +1128,7 @@ function registerCanvasEvents() {
       touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
       keys.left = p.x < WIDTH / 2; keys.right = !keys.left;
     } else if (controlType === 'swipe') {
-      swipeStartX = e.touches[0].clientX; swipeStartY = e.touches[0].clientY; swipeActive = true;
-      keys.left = false; keys.right = false;
+      swipeStartX = e.touches[0].clientX; swipeStartY = e.touches[0].clientY; swipeActive = true; swipeDir = 0;
     }
   }, { passive: false });
 
@@ -1185,11 +1184,15 @@ function registerCanvasEvents() {
       if (Math.abs(dy3) > 28) { if (dy3 > 0) { keys.down = true; keys.up = false; } else { keys.up = true; keys.down = false; } touchY = currentY; }
       keys.left = p3.x < WIDTH / 2; keys.right = !keys.left;
       touchX = e.touches[0].clientX;
-    } else if (controlType === 'swipe' && swipeActive && swipeStartX !== null) {
+    } else if (controlType === 'swipe' && swipeActive) {
       var dx = e.touches[0].clientX - swipeStartX;
-      var deadzone = 15;
-      if (Math.abs(dx) > deadzone) { keys.left = dx < 0; keys.right = dx > 0; }
-      else { keys.left = false; keys.right = false; }
+      var deadzone = 12;
+      if (Math.abs(dx) > deadzone) {
+        var newDir = dx < 0 ? -1 : 1;
+        if (swipeDir === 0) swipeDir = newDir;
+        else if (newDir !== swipeDir && Math.abs(dx) > deadzone * 2.5) swipeDir = newDir;
+      }
+      keys.left = swipeDir < 0; keys.right = swipeDir > 0;
     }
   }, { passive: false });
 
@@ -1290,7 +1293,7 @@ function registerCanvasEvents() {
       }
     }
     touchX = null; touchY = null;
-    swipeStartX = null; swipeStartY = null; swipeActive = false;
+    swipeStartX = null; swipeStartY = null; swipeActive = false; swipeDir = 0;
     if (gameState === 'playing') { keys.left = false; keys.right = false; keys.up = false; keys.down = false; gyroMoveX = 0; }
   }, { passive: false });
 }
