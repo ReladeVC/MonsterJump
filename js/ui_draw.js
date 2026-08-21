@@ -336,7 +336,7 @@ function drawGameOverScreen() {
   var animT = Math.min(1, gameOverStatsAnim / 20);
   var slideY = (1 - animT) * 40;
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  var panelW = 300, panelH = 340;
+  var panelW = 320, panelH = 280;
   var panelX = (WIDTH - panelW) / 2, panelY = (HEIGHT - panelH) / 2 - 16 + slideY;
   ctx.save();
   ctx.globalAlpha = animT;
@@ -347,7 +347,14 @@ function drawGameOverScreen() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('Попробовать еще раз?', tcx, tcy + 1);
   ctx.textBaseline = 'alphabetic';
-  var iconS = 28, rowGap = 36, rowY1 = panelY + 100, rowY2 = rowY1 + rowGap;
+  var titleBottom = panelY + 62;
+  var btnTop = panelY + panelH - 56;
+  var newBestH = newBestFlag ? 30 : 0;
+  var availH = btnTop - titleBottom - newBestH;
+  var iconS = 28, rowGap = 36;
+  var rowsH = rowGap;
+  var rowY1 = titleBottom + (availH - rowsH) / 2;
+  var rowY2 = rowY1 + rowGap;
   ctx.font = 'bold 20px Segoe UI, Arial';
   var animScore = Math.floor(score * Math.min(1, animT * 1.5));
   var animCoins = Math.floor(runCoins * Math.min(1, animT * 1.5));
@@ -360,19 +367,21 @@ function drawGameOverScreen() {
   ctx.fillText(scoreStr, blockX + iconS + 10, rowY1);
   ctx.fillText(coinStr, blockX + iconS + 10, rowY2);
   ctx.textBaseline = 'alphabetic';
-  var btnW = 200, btnH = 48, contX = (WIDTH - btnW) / 2, menuY = panelY + 190;
   if (newBestFlag) {
     var pulse = 0.6 + 0.4 * Math.sin(performance.now() / 300);
     ctx.save();
     ctx.globalAlpha = pulse;
-    drawOutlinedText('★ НОВЫЙ РЕКОРД! ★', WIDTH / 2, panelY + 160, 'bold 18px Segoe UI, Arial', 'center');
+    drawOutlinedText('★ НОВЫЙ РЕКОРД! ★', WIDTH / 2, rowY2 + 24, 'bold 18px Segoe UI, Arial', 'center');
     ctx.restore();
   }
-  drawKeycapBtn(contX, menuY, btnW, btnH, 'Меню', TEXT_COL);
-  var retryY = menuY + btnH + 12;
-  drawKeycapBtn(contX, retryY, btnW, btnH, 'Повторить', TEXT_COL);
-  gameOverMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
-  gameOverMenuBtns.retry = { x: contX, y: retryY, w: btnW, h: btnH };
+  var btnW = 120, btnH = 36, btnGap = 12;
+  var totalBtnW = btnW * 2 + btnGap;
+  var btnX = (WIDTH - totalBtnW) / 2;
+  var btnY = panelY + panelH - btnH - 20;
+  drawKeycapBtn(btnX, btnY, btnW, btnH, 'Меню', TEXT_COL);
+  drawKeycapBtn(btnX + btnW + btnGap, btnY, btnW, btnH, 'Повторить', TEXT_COL);
+  gameOverMenuBtns.menu = { x: btnX, y: btnY, w: btnW, h: btnH };
+  gameOverMenuBtns.retry = { x: btnX + btnW + btnGap, y: btnY, w: btnW, h: btnH };
   ctx.restore();
 }
 
