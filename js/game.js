@@ -557,7 +557,7 @@ function update() {
       var p = platforms[i];
       if (p.broken) continue;
       var screenY = p.y - cameraY;
-      if (screenY < -20 || screenY > HEIGHT - PLATFORM_HEIGHT - 10) continue;
+      if (screenY < -20) continue;
       if (player.x + player.width > p.x + 8 && player.x < p.x + p.width - 8 && player.y + player.height > p.y && player.y + player.height < p.y + p.height + player.vy + 2) {
         player.y = p.y - player.height;
         var jumpMul = jumpBoostTimer > 0 ? 2 : 1;
