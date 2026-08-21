@@ -850,7 +850,7 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'cheat') { for (var ci = 0; ci < h.cheat.length; ci++) handleCheatCode(h.cheat[ci]); }
         if (h.type === 'ctrl_tap') { controlType = 'tap'; saveMetaProgress(); }
         if (h.type === 'ctrl_swipe') { controlType = 'swipe'; saveMetaProgress(); }
-        if (h.type === 'ctrl_gyro') { controlType = 'gyro'; saveMetaProgress(); }
+        if (h.type === 'ctrl_gyro') { controlType = 'gyro'; saveMetaProgress(); requestGyroPermission(); }
         return;
       }
     }
@@ -1172,7 +1172,8 @@ function registerCanvasEvents() {
       }
       return;
     }
-    if (gameState !== 'playing' || isPaused || touchX === null) return;
+    if (gameState !== 'playing' || isPaused) return;
+    if (controlType !== 'swipe' && touchX === null) return;
     var p3 = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
     if (controlType === 'tap') {
       var currentY = e.touches[0].clientY;
@@ -1354,7 +1355,24 @@ function handleGyro(e) {
   else if (gamma > deadzone) { keys.right = true; keys.left = false; }
   else { keys.left = false; keys.right = false; }
 }
-window.addEventListener('deviceorientation', handleGyro);
+
+function requestGyroPermission() {
+  if (gyroEnabled) return;
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(function(state) {
+      if (state === 'granted') { window.addEventListener('deviceorientation', handleGyro); gyroEnabled = true; }
+    }).catch(function() {});
+  } else {
+    window.addEventListener('deviceorientation', handleGyro);
+    gyroEnabled = true;
+  }
+}
+
+function requestGyroOnInteraction() {
+  if (controlType === 'gyro' && !gyroEnabled) requestGyroPermission();
+}
+window.addEventListener('touchstart', requestGyroOnInteraction, { once: false });
+window.addEventListener('mousedown', requestGyroOnInteraction, { once: false });
 
 function updateLoadingTransition() {
   checkAssetsReady();
