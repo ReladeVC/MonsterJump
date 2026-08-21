@@ -13,7 +13,7 @@ var introActive = false, introTimer = 0, introLaunched = false;
 var invincibleTimer = 0, dyingTimer = 0, onPlatform = false;
 var extraLifeReady = false, shieldAngle = 0, shieldVisualScale = 0;
 var swipeStartX = null, swipeStartY = null, swipeActive = false;
-var gyroAlpha = 0, gyroEnabled = false, gyroGamma = 0, gyroMoveX = 0;
+var gyroAlpha = 0, gyroEnabled = false, gyroGamma = 0, gyroMoveX = 0, gyroOffset = null;
 var cdBonus1 = 0, cdBonus2 = 0, cdBonus3 = 0;
 var bonus2FromItem = false, bonus2CdPending = false, bonus2LandArmed = false, jumpBoostTimer = 0;
 var currentPlayerImg = null;
@@ -331,6 +331,7 @@ function startGame() {
   extraLifeReady = hasExtraLife();
   shieldVisualScale = extraLifeReady ? 1 : 0;
   invincibleTimer = 0; dyingTimer = 0;
+  gyroOffset = null;
   cdBonus1 = 0; cdBonus2 = 0; cdBonus3 = 0;
   bonus2FromItem = false; bonus2CdPending = false; bonus2LandArmed = false;
   jumpBoostTimer = 0; scoreEl.textContent = '0 m'; scoreEl.style.display = 'none';
@@ -851,7 +852,7 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'cheat') { for (var ci = 0; ci < h.cheat.length; ci++) handleCheatCode(h.cheat[ci]); }
         if (h.type === 'ctrl_tap') { controlType = 'tap'; saveMetaProgress(); }
         if (h.type === 'ctrl_swipe') { controlType = 'swipe'; saveMetaProgress(); }
-        if (h.type === 'ctrl_gyro') { controlType = 'gyro'; saveMetaProgress(); requestGyroPermission(); }
+        if (h.type === 'ctrl_gyro') { controlType = 'gyro'; gyroOffset = null; saveMetaProgress(); requestGyroPermission(); }
         return;
       }
     }
@@ -982,7 +983,7 @@ function handleGameClick(clientX, clientY) {
     if (isPaused) {
       var c = pauseMenuBtns.continue, mm = pauseMenuBtns.menu;
       var s = pauseMenuBtns.settings, r = pauseMenuBtns.retry;
-      if (c && mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) { pressBtn(c.x, c.y, c.w, c.h); isPaused = false; keys.left = false; keys.right = false; return; }
+      if (c && mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) { pressBtn(c.x, c.y, c.w, c.h); isPaused = false; keys.left = false; keys.right = false; gyroOffset = null; return; }
       if (mm && mx >= mm.x && mx <= mm.x + mm.w && my >= mm.y && my <= mm.y + mm.h) { pressBtn(mm.x, mm.y, mm.w, mm.h); isPaused = false; goToMenu(); return; }
       if (s && mx >= s.x && mx <= s.x + s.w && my >= s.y && my <= s.y + s.h) {
         pressBtn(s.x, s.y, s.w, s.h); pauseBeforeSettings = true;
@@ -1352,7 +1353,9 @@ window.addEventListener('mouseup', function() {
 
 function handleGyro(e) {
   if (controlType !== 'gyro' || gameState !== 'playing' || isPaused) { keys.left = false; keys.right = false; gyroMoveX = 0; return; }
-  var gamma = e.gamma || 0;
+  var raw = e.gamma || 0;
+  if (gyroOffset === null) { gyroOffset = raw; return; }
+  var gamma = raw - gyroOffset;
   var deadzone = 15;
   if (Math.abs(gamma) < deadzone) { keys.left = false; keys.right = false; gyroMoveX = 0; return; }
   var maxAngle = 60;
