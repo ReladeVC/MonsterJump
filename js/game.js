@@ -1128,9 +1128,7 @@ function registerCanvasEvents() {
       keys.left = p.x < WIDTH / 2; keys.right = !keys.left;
     } else if (controlType === 'swipe') {
       swipeStartX = e.touches[0].clientX; swipeStartY = e.touches[0].clientY; swipeActive = true;
-      var gp = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
-      var deadzone = 10;
-      if (Math.abs(gp.x - WIDTH / 2) > deadzone) { keys.left = gp.x < WIDTH / 2; keys.right = gp.x > WIDTH / 2; }
+      keys.left = false; keys.right = false;
     }
   }, { passive: false });
 
@@ -1186,10 +1184,10 @@ function registerCanvasEvents() {
       if (Math.abs(dy3) > 28) { if (dy3 > 0) { keys.down = true; keys.up = false; } else { keys.up = true; keys.down = false; } touchY = currentY; }
       keys.left = p3.x < WIDTH / 2; keys.right = !keys.left;
       touchX = e.touches[0].clientX;
-    } else if (controlType === 'swipe') {
-      var gp = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
-      var deadzone = 10;
-      if (Math.abs(gp.x - WIDTH / 2) > deadzone) { keys.left = gp.x < WIDTH / 2; keys.right = gp.x > WIDTH / 2; }
+    } else if (controlType === 'swipe' && swipeActive && swipeStartX !== null) {
+      var dx = e.touches[0].clientX - swipeStartX;
+      var deadzone = 15;
+      if (Math.abs(dx) > deadzone) { keys.left = dx < 0; keys.right = dx > 0; }
       else { keys.left = false; keys.right = false; }
     }
   }, { passive: false });
@@ -1355,13 +1353,13 @@ window.addEventListener('mouseup', function() {
 function handleGyro(e) {
   if (controlType !== 'gyro' || gameState !== 'playing' || isPaused) { keys.left = false; keys.right = false; gyroMoveX = 0; return; }
   var gamma = e.gamma || 0;
-  var deadzone = 8;
+  var deadzone = 15;
   if (Math.abs(gamma) < deadzone) { keys.left = false; keys.right = false; gyroMoveX = 0; return; }
-  var maxAngle = 40;
+  var maxAngle = 60;
   var clamped = Math.max(-maxAngle, Math.min(maxAngle, gamma));
   var t = (Math.abs(clamped) - deadzone) / (maxAngle - deadzone);
   t = Math.min(1, t);
-  gyroMoveX = (gamma > 0 ? 1 : -1) * t * MOVE_SPEED * 0.5;
+  gyroMoveX = (gamma > 0 ? 1 : -1) * t * MOVE_SPEED * 0.25;
   keys.left = gyroMoveX < 0; keys.right = gyroMoveX > 0;
 }
 
