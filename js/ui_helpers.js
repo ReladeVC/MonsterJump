@@ -376,6 +376,18 @@ function drawToggle(x, y, on) {
   ctx.restore();
 }
 
+function drawRadio(x, y, selected) {
+  var r = 12;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x + r, y + r, r, 0, Math.PI * 2);
+  ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2; ctx.stroke();
+  if (selected) {
+    ctx.beginPath(); ctx.arc(x + r, y + r, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#4CAF50'; ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawSlider(x, y, w, val) {
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   roundRect(x, y + 6, w, 8, 4); ctx.fill();

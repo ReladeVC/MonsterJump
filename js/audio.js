@@ -200,6 +200,7 @@ function playCoinSound() {
 var musicEnabled = true;
 var sfxEnabled = true;
 var vibrationEnabled = true;
+var controlType = 'tap';
 var musicStarted = false;
 var musicVol = 0.22;
 var sfxVol = 0.7;

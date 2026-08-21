@@ -639,13 +639,20 @@ function draw() {
     var panelW = 320, panelH = 280;
     var panelX = (WIDTH - panelW) / 2, panelY = (HEIGHT - panelH) / 2 - 20;
     drawMenuPanelBg(panelX, panelY, panelW, panelH, 20);
-    drawMenuTitle('ПАУЗА', WIDTH / 2, panelY + 42, 200, 48);
     var titleCY = panelY + 42;
     var cellS = 28;
-    var titleTextW = ctx.measureText('ПАУЗА').width;
+    drawMenuTitle('ПАУЗА', WIDTH / 2, titleCY, 200, 48);
     ctx.font = 'bold 20px Segoe UI,Arial';
-    titleTextW = ctx.measureText('ПАУЗА').width;
-    var afterTitleX = WIDTH / 2 + titleTextW / 2 + 4;
+    var titleTextW = ctx.measureText('ПАУЗА').width;
+    var pauseIconX = WIDTH / 2 - titleTextW / 2 - cellS - 14;
+    var pauseIconY = titleCY - cellS / 2;
+    var barW = 6, barH = 16, gap = 5;
+    var barsX = pauseIconX + (cellS - barW * 2 - gap) / 2;
+    var barsY = pauseIconY + (cellS - barH) / 2;
+    ctx.fillStyle = TEXT_COL;
+    roundRect(barsX, barsY, barW, barH, 2); ctx.fill();
+    roundRect(barsX + barW + gap, barsY, barW, barH, 2); ctx.fill();
+    var afterTitleX = WIDTH / 2 + titleTextW / 2 + 14;
     var cellX = afterTitleX, cellY = titleCY - cellS / 2;
     var cellText = currentLevel > 0 ? String(currentLevel) : '∞';
     if (currentLevel > 0) {
@@ -655,7 +662,8 @@ function draw() {
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.1)'; roundRect(cellX, cellY, cellS, cellS, 6); ctx.fill();
     }
-    ctx.font = 'bold 16px Segoe UI, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var cellFont = currentLevel > 0 ? 'bold 14px Segoe UI, Arial' : 'bold 22px Segoe UI, Arial';
+    ctx.font = cellFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.miterLimit = 2; ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2.5;
     ctx.strokeText(cellText, cellX + cellS / 2, cellY + cellS / 2);
     ctx.fillStyle = '#ffffff'; ctx.fillText(cellText, cellX + cellS / 2, cellY + cellS / 2);
@@ -838,6 +846,9 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); }
         if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); }
         if (h.type === 'cheat') { for (var ci = 0; ci < h.cheat.length; ci++) handleCheatCode(h.cheat[ci]); }
+        if (h.type === 'ctrl_tap') { controlType = 'tap'; saveMetaProgress(); }
+        if (h.type === 'ctrl_swipe') { controlType = 'swipe'; saveMetaProgress(); }
+        if (h.type === 'ctrl_gyro') { controlType = 'gyro'; saveMetaProgress(); }
         return;
       }
     }

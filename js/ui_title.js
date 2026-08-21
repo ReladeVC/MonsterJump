@@ -498,12 +498,12 @@ function drawTitleMenuPanel() {
       var title = m.text;
       var maxTw = scrollW - 100;
       if (ctx.measureText(title).width > maxTw) { while (title.length > 8 && ctx.measureText(title + '…').width > maxTw) title = title.slice(0, -1); title += '…'; }
-      ctx.fillText(title, midX, my + scrollH * 0.25);
+      ctx.fillText(title, midX, my + scrollH * 0.25 + 5);
       ctx.font = '11px Segoe UI'; ctx.fillStyle = TEXT_COL;
-      ctx.fillText('В процессе : ' + Math.min(s.progress, m.need) + ' из ' + m.need, midX, my + scrollH * 0.45);
-      var rewardY = my + scrollH * 0.7;
+      drawOutlinedText('В процессе : ' + Math.min(s.progress, m.need) + ' из ' + m.need, midX, my + scrollH * 0.45 + 5, '11px Segoe UI', 'center');
+      var rewardY = my + scrollH * 0.7 + 5;
       var iconS = 14;
-      var rwText = '+' + MISSION_ROLL_REWARD;
+      var rwText = '×' + MISSION_ROLL_REWARD;
       var cwText = '×' + m.reward;
       ctx.font = '11px Segoe UI';
       var rwW = (isImageReady(rollImg) ? iconS + 4 : 0) + ctx.measureText(rwText).width;
@@ -513,7 +513,7 @@ function drawTitleMenuPanel() {
       var rewardStartX = midX - totalRW / 2;
       var rX = rewardStartX;
       if (isImageReady(rollImg)) { ctx.drawImage(rollImg, rX, rewardY - iconS / 2, iconS, iconS); rX += iconS + 4; }
-      ctx.fillStyle = TEXT_COL; ctx.font = '11px Segoe UI'; ctx.textAlign = 'left';
+      ctx.fillStyle = TEXT_COL; ctx.font = '11px Segoe UI'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText(rwText, rX, rewardY);
       rX += ctx.measureText(rwText).width + rewardGap;
       if (isImageReady(goldImg)) { ctx.drawImage(goldImg, rX, rewardY - iconS / 2, iconS, iconS); rX += iconS + 4; }
@@ -572,6 +572,28 @@ function drawTitleMenuPanel() {
     endPressTransform(tp3, tx3, ty3, tw3, th3);
     titleLayout._menuHits.push({ type: 'togVibro', x: tx3, y: ty3, w: tw3, h: th3 });
     sy += rowH3b + 8;
+    var rowHCtrl = 44;
+    drawMenuPanelBg(rxx, sy, rw, rowHCtrl, 14);
+    drawOutlinedText('Управление', rxx + rowPad, sy + rowHCtrl / 2, 'bold 13px Segoe UI, Arial', 'left');
+    sy += rowHCtrl + 6;
+    var ctrlOpts = [
+      { type: 'tap', label: 'Нажатия' },
+      { type: 'swipe', label: 'Свайпы' },
+      { type: 'gyro', label: 'Гироскоп' }
+    ];
+    var ctrlRowH = 40;
+    for (var ci = 0; ci < ctrlOpts.length; ci++) {
+      var co = ctrlOpts[ci];
+      drawMenuPanelBg(rxx, sy, rw, ctrlRowH, 14);
+      drawOutlinedText(co.label, rxx + rowPad + 6, sy + ctrlRowH / 2, '14px Segoe UI, Arial', 'left');
+      var togX = rxx + rw - 70, togY = sy + (ctrlRowH - 28) / 2, togW = 56, togH = 28;
+      var togP = beginPressTransform(togX, togY, togW, togH);
+      drawRadio(togX + 4, togY + 1, controlType === co.type);
+      endPressTransform(togP, togX, togY, togW, togH);
+      titleLayout._menuHits.push({ type: 'ctrl_' + co.type, x: togX, y: togY, w: togW, h: togH });
+      sy += ctrlRowH + 4;
+    }
+    sy += 4;
     var rowH4 = 58;
     drawMenuPanelBg(rxx, sy, rw, rowH4, 14);
     drawOutlinedText('Громкость музыки', rxx + rowPad, sy + 16, 'bold 13px Segoe UI, Arial', 'left');

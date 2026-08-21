@@ -133,7 +133,7 @@ function drawSpirit() {
   var sin = Math.sin(playerTilt);
   var spiritX = cx + (offsetX * cos - offsetY * sin);
   var spiritY = cy + (offsetX * sin + offsetY * cos);
-  var playSize = size * 0.6;
+  var playSize = size * 0.72;
   ctx.save(); ctx.translate(spiritX, spiritY);
   ctx.beginPath(); ctx.arc(0, 0, playSize / 2, 0, Math.PI * 2); ctx.clip();
   ctx.globalAlpha = 0.85;
@@ -305,9 +305,14 @@ function drawHUDButtons() {
     var pPress = beginPressTransform(bx, by, bs, bs);
     drawResourceBarBg(bx, by, bs, bs);
     if (isPaused) {
-      drawOutlinedText('▶', bx + bs / 2, by + bs / 2, 'bold 22px Segoe UI, Arial', 'center');
-      ctx.strokeStyle = 'rgba(78, 205, 196, 0.7)'; ctx.lineWidth = 2;
-      roundRect(bx, by, bs, bs, 8); ctx.stroke();
+      var bw2 = 5, bh2 = 18, gap2 = 6;
+      var pbx2 = bx + bs / 2 - (bw2 * 2 + gap2) / 2;
+      var pby2 = by + bs / 2 - bh2 / 2;
+      ctx.lineJoin = 'round';
+      [0, bw2 + gap2].forEach(function(ox) {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(pbx2 + ox, pby2, bw2, bh2);
+        ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2.2; ctx.strokeRect(pbx2 + ox, pby2, bw2, bh2);
+      });
     } else {
       var bw = 5, bh = 18, gap = 6;
       var pbx = bx + bs / 2 - (bw * 2 + gap) / 2;
@@ -400,7 +405,7 @@ function drawLevelWinScreen() {
     ctx.fillStyle = 'rgba(255, 220, 80, ' + ((0.5 - levelWinAnimT) * 0.35) + ')';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
-  var panelW = 300, panelH = 360;
+  var panelW = 320, panelH = 280;
   var panelX = (WIDTH - panelW) / 2, panelY = (HEIGHT - panelH) / 2 - 20;
   ctx.save();
   ctx.translate(WIDTH / 2, HEIGHT / 2 - 10);
@@ -408,52 +413,60 @@ function drawLevelWinScreen() {
   ctx.translate(-WIDTH / 2, -(HEIGHT / 2 - 10));
   ctx.globalAlpha = alpha;
   drawMenuPanelBg(panelX, panelY, panelW, panelH, 22);
-  drawMenuTitle('Уровень пройден!', WIDTH / 2, panelY + 42, 260, 48);
-  var cellS = 72, midY = panelY + 120;
-  var gx = panelX + 28, gy = midY - cellS / 2;
+  var titleY = panelY + 42;
+  var titleText = 'Уровень';
+  var endText = 'пройден!';
+  ctx.font = 'bold 20px Segoe UI,Arial';
+  var tw1 = ctx.measureText(titleText).width;
+  var tw2 = ctx.measureText(endText).width;
+  var cellS = 28;
+  var totalW = tw1 + 5 + cellS + 5 + tw2;
+  var startX = WIDTH / 2 - totalW / 2;
+  if (isImageReady(menuNameImg)) { ctx.drawImage(menuNameImg, WIDTH / 2 - 130, titleY - 24, 260, 48); }
+  ctx.fillStyle = TEXT_COL; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(titleText, startX, titleY + 1);
+  var cellX = startX + tw1 + 5;
+  var cellY2 = titleY - cellS / 2 + 1;
   var bg = getLevelRangeImg(levelWinLevel);
-  if (isImageReady(bg)) ctx.drawImage(bg, gx, gy, cellS, cellS);
-  else { ctx.fillStyle = 'rgba(78,205,196,0.35)'; roundRect(gx, gy, cellS, cellS, 10); ctx.fill(); }
-  ctx.font = 'bold 28px Segoe UI, Arial';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 4;
-  ctx.strokeText(String(levelWinLevel), gx + cellS / 2, gy + cellS / 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(String(levelWinLevel), gx + cellS / 2, gy + cellS / 2);
-  ctx.textBaseline = 'alphabetic';
-  if (isImageReady(completeImg)) { var cs = Math.floor(cellS * 0.38); ctx.drawImage(completeImg, gx + cellS - cs - 2, gy + cellS - cs - 2, cs, cs); }
+  if (isImageReady(bg)) { ctx.drawImage(bg, cellX, cellY2, cellS, cellS); }
+  else { ctx.fillStyle = 'rgba(255,255,255,0.1)'; roundRect(cellX, cellY2, cellS, cellS, 6); ctx.fill(); }
+  ctx.font = 'bold 16px Segoe UI, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round'; ctx.miterLimit = 2; ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2.5;
+  ctx.strokeText(String(levelWinLevel), cellX + cellS / 2, cellY2 + cellS / 2);
+  ctx.fillStyle = '#ffffff'; ctx.fillText(String(levelWinLevel), cellX + cellS / 2, cellY2 + cellS / 2);
+  ctx.fillStyle = TEXT_COL; ctx.textAlign = 'left'; ctx.font = 'bold 20px Segoe UI,Arial';
+  ctx.fillText(endText, cellX + cellS + 5, titleY + 1);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   var rewardCoins = levelWinFirstClear ? LEVEL_REWARD : 0;
   var rewardCrystals = levelWinFirstClear ? LEVEL_CRYSTAL_REWARD : 0;
-  var iconS = 26, rowH2 = 36, colRight = panelX + panelW - 28;
-  ctx.font = 'bold 17px Segoe UI, Arial';
+  var iconS = 22, rowH2 = 34;
+  ctx.font = 'bold 15px Segoe UI, Arial';
   var parts = [
     { img: isImageReady(crystalImg) ? crystalImg : null, text: '× ' + rewardCrystals },
     { img: isImageReady(goldImg) ? goldImg : null, text: '× ' + rewardCoins }
   ];
-  var maxBlock = 0;
-  var measured = parts.map(function(p) {
-    var tw = ctx.measureText(p.text).width;
-    var bw = iconS + 10 + tw;
-    if (bw > maxBlock) maxBlock = bw;
-    return { img: p.img, text: p.text, tw: tw, bw: bw };
-  });
-  var rowY = midY - (parts.length - 1) * rowH2 / 2;
-  measured.forEach(function(p) {
-    var bx = colRight - maxBlock;
-    if (p.img) ctx.drawImage(p.img, bx, rowY - iconS / 2, iconS, iconS);
+  var maxTW = 0;
+  parts.forEach(function(p) { var tw = ctx.measureText(p.text).width; if (tw > maxTW) maxTW = tw; });
+  var blockW = iconS + 6 + maxTW;
+  var rewardStartX = WIDTH / 2 - blockW / 2;
+  var rewardY = panelY + 110;
+  parts.forEach(function(p) {
+    if (p.img) ctx.drawImage(p.img, rewardStartX, rewardY - iconS / 2, iconS, iconS);
     ctx.fillStyle = TEXT_COL; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(p.text, bx + iconS + 10, rowY);
-    rowY += rowH2;
+    ctx.fillText(p.text, rewardStartX + iconS + 6, rewardY);
+    rewardY += rowH2;
   });
   ctx.textBaseline = 'alphabetic';
-  var btnW2 = 200, btnH2 = 48;
-  var homeX = (WIDTH - btnW2) / 2, menuY2 = panelY + 230, nextY = menuY2 + btnH2 + 12;
+  var btnW2 = 120, btnH2 = 36, btnGap = 12;
+  var totalBtnW = btnW2 * 2 + btnGap;
+  var homeX = (WIDTH - totalBtnW) / 2;
+  var menuY2 = panelY + panelH - btnH2 - 20;
   drawKeycapBtn(homeX, menuY2, btnW2, btnH2, 'Меню', TEXT_COL);
-  drawKeycapBtn(homeX, nextY, btnW2, btnH2, levelWinLevel >= 100 ? 'Финиш' : 'Продолжить', TEXT_COL);
+  drawKeycapBtn(homeX + btnW2 + btnGap, menuY2, btnW2, btnH2, levelWinLevel >= 100 ? 'Финиш' : 'Продолжить', TEXT_COL);
   ctx.restore();
   if (levelWinAnim === 'idle') {
     levelWinBtns.home = { x: homeX, y: menuY2, w: btnW2, h: btnH2 };
-    levelWinBtns.next = { x: homeX, y: nextY, w: btnW2, h: btnH2 };
+    levelWinBtns.next = { x: homeX + btnW2 + btnGap, y: menuY2, w: btnW2, h: btnH2 };
   } else {
     levelWinBtns.home = null; levelWinBtns.next = null;
   }

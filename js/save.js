@@ -114,6 +114,8 @@ function loadProgress() {
     if (localStorage.getItem('monsterJumpMusicOn') === '0') musicEnabled = false;
     if (localStorage.getItem('monsterJumpSfxOn') === '0') sfxEnabled = false;
     if (localStorage.getItem('monsterJumpVibroOn') === '0') vibrationEnabled = false;
+    var savedCtrl = localStorage.getItem('monsterJumpControl');
+    if (savedCtrl === 'swipe' || savedCtrl === 'gyro') controlType = savedCtrl;
     music.volume = musicVol;
   } catch (e) {}
 }
@@ -146,6 +148,7 @@ function saveMetaProgress() {
     localStorage.setItem('monsterJumpMusicOn', musicEnabled ? '1' : '0');
     localStorage.setItem('monsterJumpSfxOn', sfxEnabled ? '1' : '0');
     localStorage.setItem('monsterJumpVibroOn', vibrationEnabled ? '1' : '0');
+    localStorage.setItem('monsterJumpControl', controlType);
   } catch (e) {}
 }
 
