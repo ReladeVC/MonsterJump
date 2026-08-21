@@ -640,6 +640,34 @@ function draw() {
     var panelX = (WIDTH - panelW) / 2, panelY = (HEIGHT - panelH) / 2 - 20;
     drawMenuPanelBg(panelX, panelY, panelW, panelH, 20);
     drawMenuTitle('ПАУЗА', WIDTH / 2, panelY + 42, 200, 48);
+    var titleCY = panelY + 42;
+    var cellS = 28;
+    var titleTextW = ctx.measureText('ПАУЗА').width;
+    ctx.font = 'bold 20px Segoe UI,Arial';
+    titleTextW = ctx.measureText('ПАУЗА').width;
+    var afterTitleX = WIDTH / 2 + titleTextW / 2 + 4;
+    var cellX = afterTitleX, cellY = titleCY - cellS / 2;
+    var cellText = currentLevel > 0 ? String(currentLevel) : '∞';
+    if (currentLevel > 0) {
+      var bg = getLevelRangeImg(currentLevel);
+      if (isImageReady(bg)) { ctx.drawImage(bg, cellX, cellY, cellS, cellS); }
+      else { ctx.fillStyle = 'rgba(255,255,255,0.1)'; roundRect(cellX, cellY, cellS, cellS, 6); ctx.fill(); }
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; roundRect(cellX, cellY, cellS, cellS, 6); ctx.fill();
+    }
+    ctx.font = 'bold 16px Segoe UI, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.miterLimit = 2; ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2.5;
+    ctx.strokeText(cellText, cellX + cellS / 2, cellY + cellS / 2);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(cellText, cellX + cellS / 2, cellY + cellS / 2);
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+    var coinRowY = titleCY + 58;
+    var coinBlockW = 24 + 8 + ctx.measureText('× ' + runCoins).width;
+    var coinBlockX = (WIDTH - coinBlockW) / 2;
+    if (isImageReady(goldImg)) ctx.drawImage(goldImg, coinBlockX, coinRowY - 12, 24, 24);
+    ctx.fillStyle = TEXT_COL; ctx.font = 'bold 15px Segoe UI, Arial';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('× ' + runCoins, coinBlockX + 32, coinRowY);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     if (currentLevel > 0 && levelTarget > 0) {
       var lineX1 = panelX + 40, lineX2 = panelX + panelW - 40;
       var lineY = panelY + panelH / 2;

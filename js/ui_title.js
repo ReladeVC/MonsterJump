@@ -342,9 +342,12 @@ function drawSpiritShop() {
   ctx.globalAlpha = popupFade;
   var pw = WIDTH - 20, ph = HEIGHT - 40, px = 10, py = 20;
   drawMenuPanelBg(px, py, pw, ph, 20);
+  ctx.globalAlpha = 1;
   drawMenuTitle('Магазин Духов', WIDTH / 2, py + 50, 240, 48);
+  ctx.globalAlpha = 1;
   var scx = px + pw - 28, scy = py + 32;
   drawOutlinedText('×', scx, scy, 'bold 22px Segoe UI, Arial', 'center');
+  ctx.globalAlpha = popupFade;
   titleLayout._spiritShopClose = { x: scx - 16, y: scy - 16, w: 32, h: 32 };
   var itemH = 90, startY = py + 90;
   spiritShopHits = [];
@@ -471,7 +474,7 @@ function drawTitleMenuPanel() {
       var order = ready ? 0 : (done ? 2 : 1);
       return { m: m, done: done, progress: progress, ready: ready, order: order };
     }).sort(function(a, b) { return a.order - b.order || a.m.id - b.m.id; });
-    var rowH = 88, scrollW = pw - 24, scrollH = rowH - 6;
+    var rowH = 100, scrollW = pw - 20, scrollH = rowH - 4;
     var viewTop2 = 63, viewH2 = ph - 115;
     var contentH2 = sorted.length * rowH;
     missionScrollMax = Math.max(0, contentH2 - viewH2);
@@ -485,7 +488,7 @@ function drawTitleMenuPanel() {
     ctx.save(); ctx.beginPath(); ctx.rect(4, viewTop2, pw - 8, viewH2); ctx.clip();
     for (var i = 0; i < sorted.length; i++) {
       var s = sorted[i], m = s.m;
-      var sx0 = 12, my = viewTop2 + i * rowH - missionScrollY;
+      var sx0 = 10, my = viewTop2 + i * rowH - missionScrollY;
       if (my + scrollH < viewTop2 - 4 || my > viewTop2 + viewH2 + 4) continue;
       var midX = sx0 + scrollW / 2;
       if (isImageReady(scrollImg)) { ctx.save(); if (s.done) ctx.globalAlpha = 0.7; ctx.drawImage(scrollImg, sx0, my, scrollW, scrollH); ctx.restore(); }
@@ -495,13 +498,27 @@ function drawTitleMenuPanel() {
       var title = m.text;
       var maxTw = scrollW - 100;
       if (ctx.measureText(title).width > maxTw) { while (title.length > 8 && ctx.measureText(title + '…').width > maxTw) title = title.slice(0, -1); title += '…'; }
-      ctx.fillText(title, midX, my + scrollH * 0.32);
-      ctx.font = '12px Segoe UI'; ctx.fillStyle = TEXT_COL;
-      ctx.fillText(Math.min(s.progress, m.need) + '/' + m.need + ' · монеты ×' + m.reward, midX, my + scrollH * 0.52);
-      var rollLineY = my + scrollH * 0.72;
-      if (isImageReady(rollImg)) ctx.drawImage(rollImg, midX - 36, rollLineY - 9, 18, 18);
-      ctx.fillStyle = TEXT_COL; ctx.font = 'bold 12px Segoe UI'; ctx.textAlign = 'left';
-      ctx.fillText('+' + MISSION_ROLL_REWARD, midX - 14, rollLineY + 1);
+      ctx.fillText(title, midX, my + scrollH * 0.25);
+      ctx.font = '11px Segoe UI'; ctx.fillStyle = TEXT_COL;
+      ctx.fillText('В процессе : ' + Math.min(s.progress, m.need) + ' из ' + m.need, midX, my + scrollH * 0.45);
+      var rewardY = my + scrollH * 0.7;
+      var iconS = 14;
+      var rwText = '+' + MISSION_ROLL_REWARD;
+      var cwText = '×' + m.reward;
+      ctx.font = '11px Segoe UI';
+      var rwW = (isImageReady(rollImg) ? iconS + 4 : 0) + ctx.measureText(rwText).width;
+      var cwW = (isImageReady(goldImg) ? iconS + 4 : 0) + ctx.measureText(cwText).width;
+      var rewardGap = 16;
+      var totalRW = rwW + rewardGap + cwW;
+      var rewardStartX = midX - totalRW / 2;
+      var rX = rewardStartX;
+      if (isImageReady(rollImg)) { ctx.drawImage(rollImg, rX, rewardY - iconS / 2, iconS, iconS); rX += iconS + 4; }
+      ctx.fillStyle = TEXT_COL; ctx.font = '11px Segoe UI'; ctx.textAlign = 'left';
+      ctx.fillText(rwText, rX, rewardY);
+      rX += ctx.measureText(rwText).width + rewardGap;
+      if (isImageReady(goldImg)) { ctx.drawImage(goldImg, rX, rewardY - iconS / 2, iconS, iconS); rX += iconS + 4; }
+      ctx.fillText(cwText, rX, rewardY);
+      ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       if (s.done) { ctx.fillStyle = TEXT_COL; ctx.font = 'bold 14px Segoe UI'; ctx.textAlign = 'right'; ctx.fillText('✓', sx0 + scrollW - 24, my + scrollH / 2); }
       else if (s.ready) {
