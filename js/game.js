@@ -8,6 +8,7 @@ var bonusActive = false, bonusTimer = 0;
 var bonusVisualScale = 1;
 var playerTilt = 0, bonus1Pending = false, bonusesLockedUntilLand = false, bonus1TargetY = 0;
 var isPaused = false, uiPress = null, pendingUiAction = null;
+var pauseBeforeSettings = false;
 var introActive = false, introTimer = 0, introLaunched = false;
 var invincibleTimer = 0, dyingTimer = 0, onPlatform = false;
 var extraLifeReady = false, shieldAngle = 0, shieldVisualScale = 0;
@@ -431,7 +432,7 @@ function update() {
   }
   if (gameState !== 'playing' || isPaused) return;
   if (introActive && !introLaunched) {
-    if (introTimer > 0) { introTimer--; player.vx = 0; player.vy = 0; player.y = cameraY + HEIGHT + 24; updateParticles(); updateShield(); return; }
+    if (levelIntroTimer > 0) { levelIntroTimer--; player.vx = 0; player.vy = 0; player.y = cameraY + HEIGHT + 24; updateParticles(); updateShield(); return; }
     var basePlat = platforms.reduce(function(a, b) { return (a.y > b.y ? a : b); }, platforms[0]);
     player.x = basePlat.x + basePlat.width / 2 - PLAYER_WIDTH / 2;
     player.y = cameraY + HEIGHT + 8; player.vy = JUMP_FORCE * 1.25;
@@ -635,18 +636,70 @@ function draw() {
   drawScoreHUD(); drawHUDButtons();
   if (isPaused) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    var panelW = 280, panelH = 220;
+    var panelW = 320, panelH = 280;
     var panelX = (WIDTH - panelW) / 2, panelY = (HEIGHT - panelH) / 2 - 20;
     drawMenuPanelBg(panelX, panelY, panelW, panelH, 20);
     drawMenuTitle('ПАУЗА', WIDTH / 2, panelY + 42, 200, 48);
-    var btnW = 200, btnH = 48;
-    var contX = (WIDTH - btnW) / 2, menuY = panelY + 80;
-    drawKeycapBtn(contX, menuY, btnW, btnH, 'Меню', TEXT_COL);
-    var contY = menuY + btnH + 12;
-    drawKeycapBtn(contX, contY, btnW, btnH, 'Продолжить', TEXT_COL);
-    pauseMenuBtns.menu = { x: contX, y: menuY, w: btnW, h: btnH };
-    pauseMenuBtns.continue = { x: contX, y: contY, w: btnW, h: btnH };
+    if (currentLevel > 0 && levelTarget > 0) {
+      var lineX1 = panelX + 40, lineX2 = panelX + panelW - 40;
+      var lineY = panelY + panelH / 2;
+      var lineW = lineX2 - lineX1;
+      ctx.strokeStyle = TEXT_COL; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(lineX1, lineY); ctx.lineTo(lineX2, lineY); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      var tickStep = 1000;
+      var showAll = levelTarget <= 10000;
+      for (var tk = 0; tk < levelTarget; tk += tickStep) {
+        var tx = lineX1 + (tk / levelTarget) * lineW;
+        var isEdge = tk === 0;
+        var is5k = tk % 5000 === 0;
+        if (isEdge) {
+          ctx.lineWidth = 4;
+          var tickH = 12;
+          ctx.beginPath(); ctx.moveTo(tx, lineY - tickH); ctx.lineTo(tx, lineY + tickH); ctx.stroke();
+          ctx.lineWidth = 1.5;
+          var smallX = tx + 8;
+          ctx.beginPath(); ctx.moveTo(smallX, lineY - 4); ctx.lineTo(smallX, lineY + 4); ctx.stroke();
+        } else {
+          ctx.lineWidth = 1.5;
+          var tickH2 = (!showAll && is5k) ? 9 : 6;
+          ctx.beginPath(); ctx.moveTo(tx, lineY - tickH2); ctx.lineTo(tx, lineY + tickH2); ctx.stroke();
+        }
+        if ((showAll || is5k || isEdge) && !isEdge) {
+          var tickLabel = tk >= 1000 ? (tk / 1000) + 'K' : String(tk);
+          var fontSize = isEdge ? '10px' : (!showAll && is5k ? '7px' : '5px');
+          drawOutlinedText(tickLabel, tx, lineY + 18, 'bold ' + fontSize + ' Segoe UI, Arial', 'center');
+        }
+      }
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(lineX2, lineY - 12); ctx.lineTo(lineX2, lineY + 12); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      var charX = lineX1 + 16 + Math.min(1, score / levelTarget) * (lineW - 16);
+      var charSize = 27;
+      if (isImageReady(currentPlayerImg)) {
+        var asp = currentPlayerImg.naturalWidth / currentPlayerImg.naturalHeight;
+        var dw = charSize, dh = charSize / asp;
+        if (dh > charSize) { dh = charSize; dw = charSize * asp; }
+        ctx.drawImage(currentPlayerImg, charX - dw / 2, lineY - dh / 2 - 4, dw, dh);
+      } else {
+        ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(charX, lineY - 4, 8, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    var btnW = 120, btnH = 36;
+    var btnGap = 12;
+    var totalBtnW = btnW * 2 + btnGap;
+    var btnX = (WIDTH - totalBtnW) / 2;
+    var btnY = panelY + panelH - btnH * 2 - 32;
+    drawKeycapBtn(btnX, btnY, btnW, btnH, 'Меню', TEXT_COL);
+    drawKeycapBtn(btnX + btnW + btnGap, btnY, btnW, btnH, 'Продолжить', TEXT_COL);
+    drawKeycapBtn(btnX, btnY + btnH + 8, btnW, btnH, 'Настройки', TEXT_COL);
+    drawKeycapBtn(btnX + btnW + btnGap, btnY + btnH + 8, btnW, btnH, 'Повторить', TEXT_COL);
+    pauseMenuBtns.menu = { x: btnX, y: btnY, w: btnW, h: btnH };
+    pauseMenuBtns.continue = { x: btnX + btnW + btnGap, y: btnY, w: btnW, h: btnH };
+    pauseMenuBtns.settings = { x: btnX, y: btnY + btnH + 8, w: btnW, h: btnH };
+    pauseMenuBtns.retry = { x: btnX + btnW + btnGap, y: btnY + btnH + 8, w: btnW, h: btnH };
   }
+  if (gameState !== 'title' && titleMenu) drawTitleMenuPanel();
   if (gameState === 'levelwin' && levelWinAnim !== 'fly') drawLevelWinScreen();
   if (gameState === 'gameover') drawGameOverScreen();
   if (levelIntroTimer > 0) {
@@ -724,7 +777,7 @@ function handleTitleClick(clientX, clientY) {
       my = menuOriginY + (my - menuOriginY) / ms;
     }
     var cl = titleLayout._menuClose;
-    if (cl && mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) { pressBtn(cl.x, cl.y, cl.w, cl.h); menuTargetSlide = 0; return; }
+    if (cl && mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) { pressBtn(cl.x, cl.y, cl.w, cl.h); menuTargetSlide = 0; pauseBeforeSettings = false; return; }
     var hits = titleLayout._menuHits || [];
     for (var i = 0; i < hits.length; i++) {
       var h = hits[i];
@@ -885,8 +938,15 @@ function handleGameClick(clientX, clientY) {
     }
     if (isPaused) {
       var c = pauseMenuBtns.continue, mm = pauseMenuBtns.menu;
+      var s = pauseMenuBtns.settings, r = pauseMenuBtns.retry;
       if (c && mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) { pressBtn(c.x, c.y, c.w, c.h); isPaused = false; keys.left = false; keys.right = false; return; }
       if (mm && mx >= mm.x && mx <= mm.x + mm.w && my >= mm.y && my <= mm.y + mm.h) { pressBtn(mm.x, mm.y, mm.w, mm.h); isPaused = false; goToMenu(); return; }
+      if (s && mx >= s.x && mx <= s.x + s.w && my >= s.y && my <= s.y + s.h) {
+        pressBtn(s.x, s.y, s.w, s.h); pauseBeforeSettings = true;
+        titleMenu = 'settings'; menuTargetSlide = 1; menuSlide = 0; menuOriginX = WIDTH / 2; menuOriginY = HEIGHT / 2; menuOriginW = 120; menuOriginH = 36;
+        return;
+      }
+      if (r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pressBtn(r.x, r.y, r.w, r.h); isPaused = false; retryGame(); return; }
       return;
     }
     var pb = pauseBtn;
@@ -981,6 +1041,26 @@ function registerCanvasEvents() {
       }
       return;
     }
+    if (gameState === 'playing' && titleMenu === 'settings') {
+      var pt2 = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
+      var mpx3 = pt2.x, mpy3 = pt2.y;
+      if (menuSlide > 0.02) {
+        var ms3 = Math.max(0.01, menuSlide);
+        mpx3 = menuOriginX + (mpx3 - menuOriginX) / ms3;
+        mpy3 = menuOriginY + (mpy3 - menuOriginY) / ms3;
+      }
+      var hts2 = titleLayout._menuHits;
+      for (var j = 0; j < hts2.length; j++) {
+        var h2 = hts2[j];
+        if (h2.type === 'slMusic' && mpx3 >= h2.x && mpx3 <= h2.x + h2.w && mpy3 >= h2.y && mpy3 <= h2.y + h2.h) {
+          musicVol = Math.max(0, Math.min(1, (mpx3 - h2.x) / h2.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+        }
+        if (h2.type === 'slSfx' && mpx3 >= h2.x && mpx3 <= h2.x + h2.w && mpy3 >= h2.y && mpy3 <= h2.y + h2.h) {
+          sfxVol = Math.max(0, Math.min(1, (mpx3 - h2.x) / h2.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+        }
+      }
+      return;
+    }
     if (gameState === 'title' && (titleMenu === 'levels' || titleMenu === 'missions')) {
       var p = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
       if (titleMenu === 'levels') {
@@ -1026,7 +1106,7 @@ function registerCanvasEvents() {
       skinScrollX = Math.max(0, skinScrollDrag.scroll + dx4);
       skinScrollDrag.lastX = p4.x; return;
     }
-    if (sliderDrag && gameState === 'title') {
+  if (sliderDrag && (gameState === 'title' || (gameState === 'playing' && titleMenu))) {
       var ps = canvasToGame(e.touches[0].clientX, e.touches[0].clientY);
       var mpx4 = ps.x, mpy4 = ps.y;
       if (menuSlide > 0.02) {
@@ -1096,6 +1176,23 @@ function registerCanvasEvents() {
       }
       return;
     }
+    if (gameState === 'playing' && titleMenu === 'settings' && menuSlide > 0.02) {
+      var mpx = p.x, mpy = p.y;
+      var ms = Math.max(0.01, menuSlide);
+      mpx = menuOriginX + (mpx - menuOriginX) / ms;
+      mpy = menuOriginY + (mpy - menuOriginY) / ms;
+      var hts = titleLayout._menuHits;
+      for (var i = 0; i < hts.length; i++) {
+        var h = hts[i];
+        if (h.type === 'slMusic' && mpx >= h.x && mpx <= h.x + h.w && mpy >= h.y && mpy <= h.y + h.h) {
+          musicVol = Math.max(0, Math.min(1, (mpx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); sliderDrag = 'music'; return;
+        }
+        if (h.type === 'slSfx' && mpx >= h.x && mpx <= h.x + h.w && mpy >= h.y && mpy <= h.y + h.h) {
+          sfxVol = Math.max(0, Math.min(1, (mpx - h.x) / h.w)); saveMetaProgress(); sliderDrag = 'sfx'; return;
+        }
+      }
+      return;
+    }
     if (gameState !== 'playing') return;
     if (isHudClick(p.x, p.y)) return;
     mouseDown = true;
@@ -1111,7 +1208,10 @@ function registerCanvasEvents() {
 
   canvas.addEventListener('click', function(e) {
     if (gameState === 'title') handleTitleClick(e.clientX, e.clientY);
-    else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') handleGameClick(e.clientX, e.clientY);
+    else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') {
+      if (titleMenu) handleTitleClick(e.clientX, e.clientY);
+      else handleGameClick(e.clientX, e.clientY);
+    }
   });
 
   canvas.addEventListener('touchend', function(e) {
@@ -1124,7 +1224,11 @@ function registerCanvasEvents() {
       var t = e.changedTouches[0];
       if (!wasSliderDrag) {
         if (gameState === 'title') { e.preventDefault(); handleTitleClick(t.clientX, t.clientY); }
-        else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') { e.preventDefault(); handleGameClick(t.clientX, t.clientY); }
+        else if (gameState === 'playing' || gameState === 'levelwin' || gameState === 'gameover') {
+          e.preventDefault();
+          if (titleMenu) handleTitleClick(t.clientX, t.clientY);
+          else handleGameClick(t.clientX, t.clientY);
+        }
       }
     }
     touchX = null; touchY = null;

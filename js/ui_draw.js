@@ -133,10 +133,11 @@ function drawSpirit() {
   var sin = Math.sin(playerTilt);
   var spiritX = cx + (offsetX * cos - offsetY * sin);
   var spiritY = cy + (offsetX * sin + offsetY * cos);
+  var playSize = size * 0.6;
   ctx.save(); ctx.translate(spiritX, spiritY);
-  ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.clip();
+  ctx.beginPath(); ctx.arc(0, 0, playSize / 2, 0, Math.PI * 2); ctx.clip();
   ctx.globalAlpha = 0.85;
-  ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  ctx.drawImage(img, -playSize / 2, -playSize / 2, playSize, playSize);
   ctx.restore();
 }
 

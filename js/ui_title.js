@@ -405,9 +405,11 @@ function drawTitleMenuPanel() {
   ctx.save();
   ctx.globalAlpha = alpha;
   if (!isClosing) { ctx.translate(ox, oy); ctx.scale(scale, scale); ctx.translate(-ox, -oy); }
-  if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, pw, ph);
-  else { ctx.fillStyle = 'rgba(22, 24, 40, 1)'; ctx.fillRect(0, 0, pw, ph); }
-  ctx.fillStyle = 'rgba(8, 10, 24, 0.35)'; ctx.fillRect(0, 0, pw, ph);
+  if (!pauseBeforeSettings) {
+    if (isImageReady(bgImg)) ctx.drawImage(bgImg, 0, 0, pw, ph);
+    else { ctx.fillStyle = 'rgba(22, 24, 40, 1)'; ctx.fillRect(0, 0, pw, ph); }
+    ctx.fillStyle = 'rgba(8, 10, 24, 0.35)'; ctx.fillRect(0, 0, pw, ph);
+  }
   var titles = { levels: 'Уровни', missions: 'Задания', settings: 'Настройки' };
   drawMenuTitle(titles[titleMenu] || '', pw / 2, 36, 220, 48);
   var ccx = pw - 28, ccy = 28;
