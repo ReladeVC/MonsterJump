@@ -587,7 +587,7 @@ function update() {
   }
   if (maxHeight > 2 && hintEl.style.display !== 'none') hintEl.style.display = 'none';
   generateMorePlatforms();
-  var camBottom = cameraY + HEIGHT + 5;
+  var camBottom = cameraY + HEIGHT + 5 - PLATFORM_HEIGHT;
   for (var i = platforms.length - 1; i >= 0; i--) { if (platforms[i].y >= camBottom) platforms.splice(i, 1); }
   for (var i = bonuses.length - 1; i >= 0; i--) { var b = bonuses[i]; if (b.collected || b.y >= camBottom) bonuses.splice(i, 1); }
   for (var i = coins.length - 1; i >= 0; i--) { var c = coins[i]; if (c.collected || (!c.magnetized && c.y >= camBottom)) coins.splice(i, 1); }

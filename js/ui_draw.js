@@ -35,7 +35,7 @@ function drawBackground() {
 function drawPlatform(p) {
   var bob = p.bob || 0;
   var screenY = p.y - cameraY + bob;
-  if (screenY < -50 || screenY > HEIGHT + 50) return;
+  if (screenY < -50 || screenY + PLATFORM_HEIGHT > HEIGHT + 5) return;
   if (p.broken && p.breakTimer > 8) return;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.35)';
