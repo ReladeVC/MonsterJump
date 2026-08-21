@@ -809,6 +809,7 @@ function handleTitleClick(clientX, clientY) {
         if (h.type === 'togVibro') { vibrationEnabled = !vibrationEnabled; saveMetaProgress(); }
         if (h.type === 'slMusic') { musicVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); music.volume = musicVol; saveMetaProgress(); }
         if (h.type === 'slSfx') { sfxVol = Math.max(0, Math.min(1, (mx - h.x) / h.w)); saveMetaProgress(); }
+        if (h.type === 'cheat') { for (var ci = 0; ci < h.cheat.length; ci++) handleCheatCode(h.cheat[ci]); }
         return;
       }
     }

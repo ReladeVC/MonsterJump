@@ -567,7 +567,33 @@ function drawTitleMenuPanel() {
     drawSlider(rxx + rowPad, sy + 30, rw - rowPad * 2, sfxVol);
     titleLayout._menuHits.push({ type: 'slSfx', x: rxx + rowPad, y: sy + 22, w: rw - rowPad * 2, h: 28 });
     sy += rowH5 + 12;
-    drawOutlinedText('Коды: monstergold · monsterall · monsterdell · openall', WIDTH / 2, sy + 8, 'bold 11px Segoe UI, Arial', 'center');
+    var codes = [
+      { text: 'monstergold', cheat: 'monstergold' },
+      { text: 'monsterall', cheat: 'monsterall' },
+      { text: 'monsterdell', cheat: 'monsterdell' },
+      { text: 'openall', cheat: 'openall' }
+    ];
+    var codeY = sy + 8;
+    var codeFontSize = 11;
+    ctx.font = 'bold ' + codeFontSize + 'px Segoe UI, Arial';
+    var codeGap = 16;
+    var totalW = 0;
+    var widths = [];
+    for (var ci = 0; ci < codes.length; ci++) { var w = ctx.measureText(codes[ci].text).width; widths.push(w); totalW += w; }
+    totalW += codeGap * (codes.length - 1) + ctx.measureText('Коды: ').width;
+    var codeX = (WIDTH - totalW) / 2 + ctx.measureText('Коды: ').width;
+    drawOutlinedText('Коды:', codeX - ctx.measureText('Коды: ').width, codeY, 'bold ' + codeFontSize + 'px Segoe UI, Arial', 'left');
+    for (var ci = 0; ci < codes.length; ci++) {
+      var cw = widths[ci];
+      ctx.fillStyle = '#FFD700';
+      drawOutlinedText(codes[ci].text, codeX + cw / 2, codeY, 'bold ' + codeFontSize + 'px Segoe UI, Arial', 'center');
+      titleLayout._menuHits.push({ type: 'cheat', cheat: codes[ci].cheat, x: codeX - 4, y: codeY - codeFontSize, w: cw + 8, h: codeFontSize + 8 });
+      codeX += cw + codeGap;
+      if (ci < codes.length - 1) {
+        var dotW = ctx.measureText('·').width;
+        drawOutlinedText('·', codeX - codeGap / 2, codeY, 'bold ' + codeFontSize + 'px Segoe UI, Arial', 'center');
+      }
+    }
   }
   ctx.restore();
 }
